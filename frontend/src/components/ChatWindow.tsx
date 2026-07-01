@@ -103,8 +103,21 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
         padding: '32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px'
+        gap: '24px',
+        position: 'relative'
       }}>
+        {/* Mercedes Benz Star Watermark */}
+        <div className="chat-watermark">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M 50,50 L 50,6 L 54.3,47.5 Z" fill="currentColor" />
+            <path d="M 50,50 L 50,6 L 45.7,47.5 Z" fill="currentColor" style={{ opacity: 0.5 }} />
+            <path d="M 50,50 L 88.1,72 L 54.3,47.5 Z" fill="currentColor" style={{ opacity: 0.5 }} />
+            <path d="M 50,50 L 88.1,72 L 50,55 Z" fill="currentColor" />
+            <path d="M 50,50 L 11.9,72 L 50,55 Z" fill="currentColor" style={{ opacity: 0.5 }} />
+            <path d="M 50,50 L 11.9,72 L 45.7,47.5 Z" fill="currentColor" />
+          </svg>
+        </div>
         <AnimatePresence>
           {displayMessages.map((msg) => (
             <motion.div
@@ -115,13 +128,15 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
                 display: 'flex',
                 gap: '16px',
                 alignItems: 'flex-start',
-                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
+                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                position: 'relative',
+                zIndex: 1
               }}
             >
               <div style={{
                 width: '40px',
                 height: '40px',
-                borderRadius: '50%',
+                borderRadius: '0px',
                 background: msg.role === 'user' ? 'var(--user-msg-bg)' : 'var(--icon-bg)',
                 display: 'flex',
                 alignItems: 'center',
@@ -130,7 +145,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
                 color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
                 boxShadow: msg.role === 'user' ? '0 4px 12px var(--accent-glow)' : 'none'
               }}>
-                {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                {msg.role === 'user' ? <User size={20} fill="currentColor" /> : <Bot size={20} />}
               </div>
               
               <div style={{
@@ -142,9 +157,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
                 <div style={{
                   background: msg.role === 'user' ? 'var(--user-msg-bg)' : 'var(--ai-msg-bg)',
                   padding: '16px 20px',
-                  borderRadius: '20px',
-                  borderTopRightRadius: msg.role === 'user' ? '4px' : '20px',
-                  borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '20px',
+                  borderRadius: '0px',
                   lineHeight: '1.6',
                   fontSize: '1.05rem',
                   color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
@@ -173,12 +186,12 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              style={{ display: 'flex', gap: '16px', alignItems: 'center' }}
+              style={{ display: 'flex', gap: '16px', alignItems: 'center', position: 'relative', zIndex: 1 }}
             >
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--icon-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '0px', background: 'var(--icon-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Bot size={20} />
               </div>
-              <div style={{ display: 'flex', gap: '6px', background: 'var(--ai-msg-bg)', padding: '20px', borderRadius: '20px', borderTopLeftRadius: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px', background: 'var(--ai-msg-bg)', padding: '20px', borderRadius: '0px' }}>
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
@@ -193,7 +206,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
         <div style={{ 
           display: 'flex', 
           background: 'var(--input-bg)', 
-          borderRadius: '16px',
+          borderRadius: '0px',
           border: '1px solid var(--panel-border)',
           padding: '10px 10px 10px 20px',
           transition: 'all 0.3s ease',
@@ -223,7 +236,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
               border: 'none',
               width: '44px',
               height: '44px',
-              borderRadius: '12px',
+              borderRadius: '0px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -1,10 +1,23 @@
 import { motion } from 'framer-motion'
-import { Wallet, Zap, Server } from 'lucide-react'
+import { Wallet, Bot } from 'lucide-react'
 import { translations } from '../i18n'
 import type { Language } from '../i18n'
 import type { UserSession } from '../App'
+import type { ReactNode } from 'react'
 
-export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, spent: number, lang: Language, user: UserSession }) {
+export function FinOpsSidebar({ 
+  budget, 
+  spent, 
+  lang, 
+  user,
+  children
+}: { 
+  budget: number, 
+  spent: number, 
+  lang: Language, 
+  user: UserSession,
+  children?: ReactNode
+}) {
   const t = translations[lang]
   const percentage = Math.min((spent / budget) * 100, 100)
   const isWarning = percentage > 80
@@ -57,7 +70,9 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
         padding: '32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '40px'
+        gap: '40px',
+        height: '100%',
+        boxSizing: 'border-box'
       }}
     >
       <div>
@@ -75,7 +90,7 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
           </span>
         </div>
         
-        <div style={{ background: 'var(--icon-bg)', height: '10px', borderRadius: '6px', overflow: 'hidden' }}>
+        <div style={{ background: 'var(--icon-bg)', height: '10px', borderRadius: '0px', overflow: 'hidden' }}>
           <motion.div 
             initial={{ width: 0 }}
             animate={{ width: `${percentage}%` }}
@@ -83,7 +98,7 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
             style={{ 
               height: '100%', 
               background: isWarning ? '#ff4d4f' : 'var(--user-msg-bg)',
-              borderRadius: '6px',
+              borderRadius: '0px',
               boxShadow: isWarning ? '0 0 10px rgba(255, 77, 79, 0.5)' : 'none'
             }}
           />
@@ -105,11 +120,7 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              {model.isServer ? (
-                <Server size={20} color="var(--accent-primary)" />
-              ) : (
-                <Zap size={20} color="var(--accent-secondary)" />
-              )}
+              <Bot size={20} color="var(--accent-primary)" />
               <strong style={{ fontSize: '1rem', fontWeight: 500 }}>{model.name}</strong>
             </div>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t.cost} {model.cost}</p>
@@ -117,6 +128,10 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
         ))}
       </div>
       
+      {/* Footer controls space */}
+      <div style={{ marginTop: 'auto' }}>
+        {children}
+      </div>
     </motion.div>
   )
 }
