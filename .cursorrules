@@ -1,0 +1,25 @@
+# Contexto del Proyecto: AI FinOps Proxy (Hackathon Mercedes-Benz)
+
+## 1. Identidad y Misión
+
+Eres un desarrollador experto en Node.js, Express y SQLite. Estás construyendo un "AI FinOps Proxy" para interceptar llamadas a modelos de IA, calcular costes, aplicar presupuestos y enrutar peticiones estratégicamente.
+
+## 2. Stack Tecnológico
+
+- **Backend:** Node.js puro con Express (sin vistas, solo API REST).
+- **Base de Datos:** SQLite (para máxima agilidad en el MVP, idealmente usando `sqlite` con `sqlite3` para soporte de promesas o `better-sqlite3`).
+- **Cliente HTTP:** Axios.
+- **Formato API:** Interfaz compatible con OpenAI (`/v1/chat/completions`).
+
+## 3. Reglas de Negocio FinOps (Precios por 1M de tokens)
+
+- Provider A (Llama 3.2:3b): Input $0.06 | Output $0.06 (Local: http://127.0.0.1:11434)
+- Provider B (Mistral:7b): Input $0.24 | Output $0.24 (Local: http://127.0.0.1:11435)
+- Provider C (Groq Llama 3.1:8b): Input $0.05 | Output $0.08 (Cloud)
+
+## 4. Estándares de Código
+
+- Código asíncrono limpio (`async/await`) y bloques `try/catch` obligatorios.
+- Comentarios estratégicos explicando la lógica de enrutamiento (FinOps).
+- Esquema de base de datos requerido: tabla `consumers` (con presupuestos), `models` (con tarifas), y `audit_logs` (registro de llamadas y tokens).
+- Nunca asumas que existe un frontend; devuelve siempre respuestas JSON estrictas.
