@@ -5,6 +5,7 @@ import { ChatWindow } from './components/ChatWindow'
 import { FinOpsSidebar } from './components/FinOpsSidebar'
 import { translations } from './i18n'
 import type { Language, Department } from './i18n'
+import { getConsumerId } from './consumers'
 import './index.css'
 
 export interface UserSession {
@@ -14,9 +15,11 @@ export interface UserSession {
 
 type FontSize = 'small' | 'medium' | 'large'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
 export default function App() {
-  const [budget] = useState(5.00)
-  const [spent, setSpent] = useState(1.24)
+  const [budget, setBudget] = useState(5.00)
+  const [spent, setSpent] = useState(0)
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [lang, setLang] = useState<Language>('es')
   const [fontSize, setFontSize] = useState<FontSize>('medium')
@@ -51,6 +54,22 @@ export default function App() {
     if (user) {
       document.documentElement.classList.add(`dept-${user.department}`)
     }
+  }, [user])
+
+  // Carga presupuesto/gasto real del consumidor al iniciar sesión
+  useEffect(() => {
+    if (!user) return
+    const consumerId = getConsumerId(user.department)
+    let cancelled = false
+    fetch(`${API_BASE_URL}/v1/consumers/${consumerId}/summary`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (typeof data?.monthly_budget_usd === 'number') setBudget(data.monthly_budget_usd)
+        if (typeof data?.current_spend_usd === 'number') setSpent(data.current_spend_usd)
+      })
+      .catch(() => { /* backend no disponible, valores por defecto */ })
+    return () => { cancelled = true }
   }, [user])
 
   useEffect(() => {
@@ -313,7 +332,14 @@ export default function App() {
             {renderControls(true)}
           </FinOpsSidebar>
           
-          <ChatWindow onMessageSent={(cost) => setSpent(s => s + cost)} lang={lang} user={user} />
+          <ChatWindow
+            onMessageSent={({ currentSpend, monthlyBudget }) => {
+              setSpent(currentSpend)
+              if (monthlyBudget > 0) setBudget(monthlyBudget)
+            }}
+            lang={lang}
+            user={user}
+          />
         </>
       )}
     </div>

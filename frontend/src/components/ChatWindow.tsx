@@ -4,6 +4,7 @@ import { Send, Bot, User } from 'lucide-react'
 import { translations } from '../i18n'
 import type { Language } from '../i18n'
 import type { UserSession } from '../App'
+import { getConsumerId } from '../consumers'
 
 type Message = {
   id: string
@@ -11,12 +12,33 @@ type Message = {
   content: string
   model?: string
   cost?: number
+  routingReason?: string
 }
 
-export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost: number) => void, lang: Language, user: UserSession }) {
+type ChatUsageUpdate = {
+  currentSpend: number
+  monthlyBudget: number
+}
+
+function formatUsd(value: number): string {
+  if (value >= 0.01) return value.toFixed(4)
+  return value.toFixed(8)
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
+export function ChatWindow({
+  onMessageSent,
+  lang,
+  user
+}: {
+  onMessageSent: (update: ChatUsageUpdate) => void
+  lang: Language
+  user: UserSession
+}) {
   const t = translations[lang]
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', role: 'assistant', content: '', model: 'system', cost: 0 } // Se traduce dinámicamente en el render
+    { id: '1', role: 'assistant', content: '', model: 'system', cost: 0 }
   ])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -26,85 +48,81 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input }
+    const prompt = input.trim()
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: prompt }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setIsTyping(true)
 
-    // Simulador de respuesta del Proxy personalizado según departamento
-    setTimeout(() => {
-      const isComplex = input.length > 50
-      let modelUsed = ''
-      let estimatedCost = 0
-      let responseTemplate = ''
+    const consumerId = getConsumerId(user.department)
 
-      switch (user.department) {
-        case 'engineering':
-          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama-3.1-8b (Groq)'
-          estimatedCost = isComplex ? 0.00015 : 0.00005
-          responseTemplate = t.deptMockResponse.engineering
-          break
-        case 'marketing':
-          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00015 : 0.00006
-          responseTemplate = t.deptMockResponse.marketing
-          break
-        case 'sales':
-          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00005 : 0.00006
-          responseTemplate = t.deptMockResponse.sales
-          break
-        case 'support':
-        default:
-          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00005 : 0.00006
-          responseTemplate = t.deptMockResponse.support
-          break
+    try {
+      // Llamada real al AI FinOps Proxy. El backend decide el modelo,
+      // calcula el coste y aplica presupuesto. El frontend solo pinta la respuesta.
+      const response = await fetch(`${API_BASE_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-consumer-id': consumerId
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.detail || data?.error || 'Error en el proxy FinOps')
       }
-      
-      onMessageSent(estimatedCost)
-      
-      const aiMsg: Message = { 
-        id: (Date.now() + 1).toString(), 
-        role: 'assistant', 
-        content: responseTemplate.replace('{model}', modelUsed),
+
+      const modelUsed = data?.model ?? 'desconocido'
+      const assistantText = data?.choices?.[0]?.message?.content ?? t.mockResponse.replace('{model}', modelUsed)
+      const cost = Number(data?.finops?.cost_usd ?? 0)
+
+      onMessageSent({
+        currentSpend: Number(data?.finops?.current_spend_usd ?? 0),
+        monthlyBudget: Number(data?.finops?.monthly_budget_usd ?? 0)
+      })
+
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: assistantText,
         model: modelUsed,
-        cost: estimatedCost
-      }
-      setMessages(prev => [...prev, aiMsg])
+        cost,
+        routingReason: data?.finops?.routing_reason
+      }])
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Error desconocido del proxy'
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `⚠️ ${msg}`
+      }])
+    } finally {
       setIsTyping(false)
-    }, 1800)
+    }
   }
 
-  // Traducción en tiempo real para el primer mensaje (bienvenida)
-  const displayMessages = messages.map(msg => 
+  const displayMessages = messages.map(msg =>
     msg.id === '1' ? { ...msg, content: t.deptWelcome[user.department] } : msg
   )
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
       className="glass-panel"
-      style={{ 
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      <div style={{ 
-        flex: 1, 
-        overflowY: 'auto', 
-        padding: '32px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px',
-        position: 'relative'
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '32px',
+        display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative'
       }}>
         {/* Mercedes Benz Star Watermark */}
         <div className="chat-watermark">
@@ -118,6 +136,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
             <path d="M 50,50 L 11.9,72 L 45.7,47.5 Z" fill="currentColor" />
           </svg>
         </div>
+
         <AnimatePresence>
           {displayMessages.map((msg) => (
             <motion.div
@@ -125,67 +144,56 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               style={{
-                display: 'flex',
-                gap: '16px',
-                alignItems: 'flex-start',
+                display: 'flex', gap: '16px', alignItems: 'flex-start',
                 flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-                position: 'relative',
-                zIndex: 1
+                position: 'relative', zIndex: 1
               }}
             >
               <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '0px',
+                width: '40px', height: '40px', borderRadius: '0px',
                 background: msg.role === 'user' ? 'var(--user-msg-bg)' : 'var(--icon-bg)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
                 boxShadow: msg.role === 'user' ? '0 4px 12px var(--accent-glow)' : 'none'
               }}>
                 {msg.role === 'user' ? <User size={20} fill="currentColor" /> : <Bot size={20} />}
               </div>
-              
+
               <div style={{
-                maxWidth: '75%',
-                display: 'flex',
-                flexDirection: 'column',
+                maxWidth: '75%', display: 'flex', flexDirection: 'column',
                 alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
               }}>
                 <div style={{
                   background: msg.role === 'user' ? 'var(--user-msg-bg)' : 'var(--ai-msg-bg)',
-                  padding: '16px 20px',
-                  borderRadius: '0px',
-                  lineHeight: '1.6',
-                  fontSize: '1.05rem',
+                  padding: '16px 20px', borderRadius: '0px', lineHeight: '1.6', fontSize: '1.05rem',
                   color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
                   border: msg.role === 'assistant' ? '1px solid var(--panel-border)' : 'none',
                   whiteSpace: 'pre-wrap'
                 }}>
                   {msg.content}
                 </div>
-                
-                {msg.cost !== undefined && msg.cost > 0 && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
+
+                {msg.model !== undefined && msg.model !== 'system' && (
+                  <motion.span
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
                     style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px', padding: '0 8px' }}
                   >
-                    {t.routing} <strong style={{color: 'var(--text-primary)'}}>{msg.model}</strong> • {t.costLabel} <strong style={{color: '#52c41a'}}>${msg.cost.toFixed(5)}</strong>
+                    {t.routing} <strong style={{ color: 'var(--text-primary)' }}>{msg.model}</strong>
+                    {msg.cost !== undefined && msg.cost > 0 && (
+                      <> • {t.costLabel} <strong style={{ color: '#52c41a' }}>${formatUsd(msg.cost)}</strong></>
+                    )}
+                    {msg.routingReason && (
+                      <><br /><span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{msg.routingReason}</span></>
+                    )}
                   </motion.span>
                 )}
               </div>
             </motion.div>
           ))}
-          
+
           {isTyping && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
               style={{ display: 'flex', gap: '16px', alignItems: 'center', position: 'relative', zIndex: 1 }}
             >
               <div style={{ width: '40px', height: '40px', borderRadius: '0px', background: 'var(--icon-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -203,47 +211,29 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
       </div>
 
       <div style={{ padding: '24px 32px', borderTop: '1px solid var(--panel-border)' }}>
-        <div style={{ 
-          display: 'flex', 
-          background: 'var(--input-bg)', 
-          borderRadius: '0px',
-          border: '1px solid var(--panel-border)',
-          padding: '10px 10px 10px 20px',
-          transition: 'all 0.3s ease',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+        <div style={{
+          display: 'flex', background: 'var(--input-bg)', borderRadius: '0px',
+          border: '1px solid var(--panel-border)', padding: '10px 10px 10px 20px',
+          transition: 'all 0.3s ease', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
         }}>
-          <input 
+          <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={t.inputPlaceholder}
             style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-primary)',
-              fontSize: '1.05rem',
-              outline: 'none',
-              fontFamily: 'inherit'
+              flex: 1, background: 'transparent', border: 'none',
+              color: 'var(--text-primary)', fontSize: '1.05rem', outline: 'none', fontFamily: 'inherit'
             }}
           />
-          <motion.button 
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <motion.button
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={handleSend}
             style={{
-              background: 'var(--user-msg-bg)',
-              border: 'none',
-              width: '44px',
-              height: '44px',
-              borderRadius: '0px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-inverse)',
-              cursor: 'pointer',
-              opacity: input.trim() ? 1 : 0.5,
-              transition: 'opacity 0.2s ease'
+              background: 'var(--user-msg-bg)', border: 'none', width: '44px', height: '44px',
+              borderRadius: '0px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text-inverse)', cursor: 'pointer',
+              opacity: input.trim() ? 1 : 0.5, transition: 'opacity 0.2s ease'
             }}
           >
             <Send size={20} style={{ marginLeft: '-2px' }} />
