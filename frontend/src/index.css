@@ -6,14 +6,14 @@
   --text-primary: #f0f0f2;
   --text-secondary: #8c8f9c;
   --text-inverse: #ffffff;
-  --accent-primary: #9d4edd;
-  --accent-secondary: #3a86ff;
-  --user-msg-bg: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  --accent-primary: #cbd5e1;
+  --accent-secondary: #94a3b8;
+  --user-msg-bg: var(--accent-primary);
   --ai-msg-bg: rgba(255, 255, 255, 0.04);
   --font-main: 'MB Corpo S Text', 'CorpoS', 'Inter', system-ui, sans-serif;
   --font-title: 'MB Corpo A Title', 'CorpoA', 'Georgia', serif;
-  --gradient-1: rgba(157, 78, 221, 0.12);
-  --gradient-2: rgba(58, 134, 255, 0.12);
+  --gradient-1: rgba(255, 255, 255, 0.05);
+  --gradient-2: rgba(148, 163, 184, 0.05);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   --input-bg: rgba(0,0,0,0.3);
   --icon-bg: rgba(255,255,255,0.08);
@@ -27,12 +27,12 @@
   --text-primary: #1a1c23;
   --text-secondary: #5a5d6e;
   --text-inverse: #ffffff;
-  --accent-primary: #8a2be2;
-  --accent-secondary: #2563eb;
-  --user-msg-bg: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  --accent-primary: #64748b;
+  --accent-secondary: #475569;
+  --user-msg-bg: var(--accent-primary);
   --ai-msg-bg: rgba(0, 0, 0, 0.04);
-  --gradient-1: rgba(138, 43, 226, 0.15);
-  --gradient-2: rgba(37, 99, 235, 0.15);
+  --gradient-1: rgba(0, 0, 0, 0.03);
+  --gradient-2: rgba(100, 116, 139, 0.03);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08);
   --input-bg: rgba(255,255,255,0.6);
   --icon-bg: rgba(0,0,0,0.06);
@@ -62,7 +62,7 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
-  border-radius: 20px;
+  border-radius: 0px;
   box-shadow: var(--glass-shadow);
   transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
@@ -77,57 +77,57 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Department Themes */
 :root {
-  --accent-glow: rgba(157, 78, 221, 0.25);
+  --accent-glow: rgba(255, 255, 255, 0.15);
 }
 
 :root.dept-marketing {
   --accent-primary: #9d4edd;
-  --accent-secondary: #3a86ff;
-  --gradient-1: rgba(157, 78, 221, 0.12);
-  --gradient-2: rgba(58, 134, 255, 0.12);
-  --accent-glow: rgba(157, 78, 221, 0.25);
+  --accent-secondary: #9d4edd;
+  --gradient-1: rgba(157, 78, 221, 0.08);
+  --gradient-2: rgba(157, 78, 221, 0.08);
+  --accent-glow: rgba(157, 78, 221, 0.2);
 }
 
 :root.dept-engineering {
   --accent-primary: #06d6a0;
-  --accent-secondary: #118ab2;
-  --gradient-1: rgba(6, 214, 160, 0.12);
-  --gradient-2: rgba(17, 138, 178, 0.12);
-  --accent-glow: rgba(6, 214, 160, 0.25);
+  --accent-secondary: #06d6a0;
+  --gradient-1: rgba(6, 214, 160, 0.08);
+  --gradient-2: rgba(6, 214, 160, 0.08);
+  --accent-glow: rgba(6, 214, 160, 0.2);
 }
 
 :root.dept-sales {
-  --accent-primary: #ffb703;
+  --accent-primary: #fb8500;
   --accent-secondary: #fb8500;
-  --gradient-1: rgba(255, 183, 3, 0.12);
-  --gradient-2: rgba(251, 133, 0, 0.12);
-  --accent-glow: rgba(255, 183, 3, 0.25);
+  --gradient-1: rgba(251, 133, 0, 0.08);
+  --gradient-2: rgba(251, 133, 0, 0.08);
+  --accent-glow: rgba(251, 133, 0, 0.2);
 }
 
 :root.dept-support {
   --accent-primary: #ff006e;
-  --accent-secondary: #8338ec;
-  --gradient-1: rgba(255, 0, 110, 0.12);
-  --gradient-2: rgba(131, 56, 236, 0.12);
-  --accent-glow: rgba(255, 0, 110, 0.25);
+  --accent-secondary: #ff006e;
+  --gradient-1: rgba(255, 0, 110, 0.08);
+  --gradient-2: rgba(255, 0, 110, 0.08);
+  --accent-glow: rgba(255, 0, 110, 0.2);
 }
 
 /* Light mode department adjustments */
 :root.light.dept-marketing {
-  --gradient-1: rgba(157, 78, 221, 0.15);
-  --gradient-2: rgba(58, 134, 255, 0.15);
+  --gradient-1: rgba(157, 78, 221, 0.1);
+  --gradient-2: rgba(157, 78, 221, 0.1);
 }
 :root.light.dept-engineering {
-  --gradient-1: rgba(6, 214, 160, 0.15);
-  --gradient-2: rgba(17, 138, 178, 0.15);
+  --gradient-1: rgba(6, 214, 160, 0.1);
+  --gradient-2: rgba(6, 214, 160, 0.1);
 }
 :root.light.dept-sales {
-  --gradient-1: rgba(255, 183, 3, 0.15);
-  --gradient-2: rgba(251, 133, 0, 0.15);
+  --gradient-1: rgba(251, 133, 0, 0.1);
+  --gradient-2: rgba(251, 133, 0, 0.1);
 }
 :root.light.dept-support {
-  --gradient-1: rgba(255, 0, 110, 0.15);
-  --gradient-2: rgba(131, 56, 236, 0.15);
+  --gradient-1: rgba(255, 0, 110, 0.1);
+  --gradient-2: rgba(255, 0, 110, 0.1);
 }
 
 /* Registration Form Styles */
@@ -188,7 +188,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0 16px;
   background: var(--input-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
+  border-radius: 0px;
   color: var(--text-primary);
   font-size: 1rem;
   font-family: inherit;
@@ -217,10 +217,10 @@ h1, h2, h3, h4, h5, h6 {
   height: 52px;
   background: var(--user-msg-bg);
   border: none;
-  border-radius: 12px;
-  color: var(--text-inverse);
+  border-radius: 0px;
+  color: #0b0c10;
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 16px var(--accent-glow);
   transition: all 0.3s ease;
@@ -237,6 +237,56 @@ h1, h2, h3, h4, h5, h6 {
 
 .register-btn:active {
   transform: translateY(0);
+}
+
+/* Header Buttons Styling */
+.header-btn {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary) !important;
+  border-radius: 0px;
+  padding: 0 16px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.header-btn:hover {
+  background: var(--icon-bg);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.header-btn svg {
+  stroke: currentColor;
+  color: inherit;
+}
+
+/* Chat Watermark Styling */
+.chat-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 280px;
+  color: var(--text-primary);
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.4s ease;
+}
+
+:root.light .chat-watermark {
+  opacity: 0.09; /* Stand out more when background is white/light */
 }
 
 

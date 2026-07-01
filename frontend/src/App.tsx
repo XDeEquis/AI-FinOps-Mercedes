@@ -92,22 +92,7 @@ export default function App() {
         {user && (
           <button 
             onClick={handleLogout}
-            style={{
-              background: 'var(--panel-bg)',
-              border: '1px solid var(--panel-border)',
-              color: 'var(--text-primary)',
-              borderRadius: '24px',
-              padding: '0 16px',
-              height: '48px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              backdropFilter: 'blur(10px)',
-              fontWeight: 500,
-              fontSize: '0.95rem',
-              transition: 'all 0.2s'
-            }}
+            className="header-btn"
           >
             <LogOut size={16} />
             {translations[lang].logoutLabel}
@@ -118,22 +103,7 @@ export default function App() {
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button 
             onClick={() => setIsLangOpen(!isLangOpen)}
-            style={{
-              background: 'var(--panel-bg)',
-              border: '1px solid var(--panel-border)',
-              color: 'var(--text-primary)',
-              borderRadius: '24px',
-              padding: '0 16px',
-              height: '48px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              backdropFilter: 'blur(10px)',
-              fontWeight: 500,
-              fontSize: '0.95rem',
-              transition: 'all 0.2s'
-            }}
+            className="header-btn"
           >
             <Globe size={18} />
             {lang.toUpperCase()}
@@ -146,8 +116,7 @@ export default function App() {
               top: 'calc(100% + 8px)',
               right: 0,
               background: 'var(--panel-bg)',
-              border: '1px solid var(--panel-border)',
-              borderRadius: '12px',
+              borderRadius: '0px',
               padding: '8px',
               display: 'flex',
               flexDirection: 'column',
@@ -168,10 +137,8 @@ export default function App() {
                   onMouseLeave={(e) => e.currentTarget.style.background = lang === l.code ? 'var(--icon-bg)' : 'transparent'}
                   style={{
                     background: lang === l.code ? 'var(--icon-bg)' : 'transparent',
-                    border: 'none',
-                    color: 'var(--text-primary)',
                     padding: '8px 12px',
-                    borderRadius: '8px',
+                    borderRadius: '0px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     fontSize: '0.9rem',
@@ -189,20 +156,8 @@ export default function App() {
         {/* Theme Toggle */}
         <button 
           onClick={() => setIsDarkMode(!isDarkMode)}
-          style={{
-            background: 'var(--panel-bg)',
-            border: '1px solid var(--panel-border)',
-            color: 'var(--text-primary)',
-            borderRadius: '50%',
-            width: '48px',
-            height: '48px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
-            transition: 'all 0.2s'
-          }}
+          className="header-btn"
+          style={{ width: '48px', padding: 0 }}
         >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
