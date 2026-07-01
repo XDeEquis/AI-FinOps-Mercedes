@@ -13,7 +13,6 @@ export const translations = {
     routing: "Routing:",
     costLabel: "Cost:",
     inputPlaceholder: "Send a message to the proxy...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -25,6 +24,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "Small Text",
+    fontMedium: "Medium Text",
+    fontLarge: "Large Text",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -48,7 +50,6 @@ export const translations = {
     routing: "Enrutamiento:",
     costLabel: "Coste:",
     inputPlaceholder: "Envía un mensaje al proxy...",
-    // New fields
     registerTitle: "Acceso al Proxy FinOps",
     registerSubtitle: "Configura el perfil de tu sesión",
     nameLabel: "Tu Nombre",
@@ -60,6 +61,9 @@ export const translations = {
     deptSupport: "Soporte",
     enterBtn: "Ingresar al Panel",
     logoutLabel: "Cambiar Dept.",
+    fontSmall: "Letra Pequeña",
+    fontMedium: "Letra Mediana",
+    fontLarge: "Letra Grande",
     deptWelcome: {
       marketing: "¡Hola! Bienvenido al Chat de FinOps de Marketing. Te ayudaré a redactar textos, generar lemas y planificar campañas optimizando costes de enrutamiento.",
       engineering: "Sistema inicializado. Asistente técnico de código y base de datos activo. Enrutaré peticiones de código complejas a Mistral/Llama3.1 e instrucciones simples a modelos rápidos.",
@@ -83,7 +87,6 @@ export const translations = {
     routing: "Routing:",
     costLabel: "Kosten:",
     inputPlaceholder: "Senden Sie eine Nachricht an den Proxy...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -95,6 +98,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "Kleiner Text",
+    fontMedium: "Mittlerer Text",
+    fontLarge: "Großer Text",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -118,7 +124,6 @@ export const translations = {
     routing: "Routage:",
     costLabel: "Coût:",
     inputPlaceholder: "Envoyez un message au proxy...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -130,6 +135,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "Petit Texte",
+    fontMedium: "Texte Moyen",
+    fontLarge: "Grand Texte",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -148,12 +156,11 @@ export const translations = {
     budgetUsage: "Utilizzo del Budget",
     activeModels: "Modelli Attivi",
     cost: "Costo:",
-    welcomeMessage: "Ciao! Sono il Proxy AI FinOps. Invia un mensaje per vedere come indirizzo le richieste a modelli diversi per ottimizzare i costi.",
+    welcomeMessage: "Ciao! Sono il Proxy AI FinOps. Invia un messaggio per vedere come indirizzo le richieste a modelli diversi per ottimizzare i costi.",
     mockResponse: "*(Risposta simulata)* Ho elaborato la tua richiesta utilizando **{model}** perché è l'opzione più efficiente per questo tipo di attività in base alle nostre regole FinOps.",
     routing: "Routing:",
     costLabel: "Costo:",
     inputPlaceholder: "Invia un messaggio al proxy...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -165,6 +172,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "Testo Piccolo",
+    fontMedium: "Testo Medio",
+    fontLarge: "Testo Grande",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -188,7 +198,6 @@ export const translations = {
     routing: "ルーティング:",
     costLabel: "コスト:",
     inputPlaceholder: "プロキシにメッセージを送信...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -200,6 +209,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "小文字",
+    fontMedium: "中文字",
+    fontLarge: "大文字",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -223,7 +235,6 @@ export const translations = {
     routing: "라우팅:",
     costLabel: "비용:",
     inputPlaceholder: "프록시에 메시지 보내기...",
-    // New fields
     registerTitle: "Sign In to FinOps Proxy",
     registerSubtitle: "Configure your session profile",
     nameLabel: "Your Name",
@@ -235,6 +246,9 @@ export const translations = {
     deptSupport: "Customer Support",
     enterBtn: "Enter Dashboard",
     logoutLabel: "Change Dept.",
+    fontSmall: "작은 텍스트",
+    fontMedium: "중간 텍스트",
+    fontLarge: "큰 텍스트",
     deptWelcome: {
       marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
       engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
@@ -242,7 +256,7 @@ export const translations = {
       support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
     },
     deptMockResponse: {
-      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here 정 is your pitch: *'Unlock efficiency, embrace progress.'*",
       engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
       sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
       support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"

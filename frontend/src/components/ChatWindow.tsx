@@ -100,7 +100,7 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
       <div style={{ 
         flex: 1, 
         overflowY: 'auto', 
-        padding: '96px 32px 32px 32px',
+        padding: '32px',
         display: 'flex',
         flexDirection: 'column',
         gap: '24px',

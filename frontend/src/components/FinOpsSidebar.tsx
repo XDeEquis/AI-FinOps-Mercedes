@@ -3,8 +3,21 @@ import { Wallet, Bot } from 'lucide-react'
 import { translations } from '../i18n'
 import type { Language } from '../i18n'
 import type { UserSession } from '../App'
+import type { ReactNode } from 'react'
 
-export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, spent: number, lang: Language, user: UserSession }) {
+export function FinOpsSidebar({ 
+  budget, 
+  spent, 
+  lang, 
+  user,
+  children
+}: { 
+  budget: number, 
+  spent: number, 
+  lang: Language, 
+  user: UserSession,
+  children?: ReactNode
+}) {
   const t = translations[lang]
   const percentage = Math.min((spent / budget) * 100, 100)
   const isWarning = percentage > 80
@@ -57,7 +70,9 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
         padding: '32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '40px'
+        gap: '40px',
+        height: '100%',
+        boxSizing: 'border-box'
       }}
     >
       <div>
@@ -113,6 +128,10 @@ export function FinOpsSidebar({ budget, spent, lang, user }: { budget: number, s
         ))}
       </div>
       
+      {/* Footer controls space */}
+      <div style={{ marginTop: 'auto' }}>
+        {children}
+      </div>
     </motion.div>
   )
 }
