@@ -8,7 +8,6 @@ const db = require('../db');
 // modelos descargados (task pull). Por defecto seguimos en modo simulación,
 // tal y como pidieron los organizadores para priorizar la lógica FinOps.
 const REAL_PROVIDERS_ENABLED = process.env.ENABLE_REAL_PROVIDERS === 'true';
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // Punto de integración opcional para notificaciones externas (email vía
 // servicio de terceros, Slack, Teams...). Si no se configura, las alertas
@@ -82,14 +81,8 @@ async function callProvider(modelRow, messages) {
     }
 
     try {
+        // Solo proveedores locales de Ollama (OpenAI-compatible). Sin claves externas.
         const headers = { 'Content-Type': 'application/json' };
-        if (modelRow.model_id === 'llama-3.1-8b-instant') {
-            if (!GROQ_API_KEY) {
-                console.warn('[PROVIDER] ⚠️ GROQ_API_KEY no configurada. Usando simulación.');
-                return null;
-            }
-            headers.Authorization = `Bearer ${GROQ_API_KEY}`;
-        }
 
         const response = await axios.post(
             `${modelRow.base_url}/chat/completions`,

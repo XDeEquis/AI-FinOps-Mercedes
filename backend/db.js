@@ -33,11 +33,16 @@ const DEFAULT_CONSUMERS = [
 ];
 
 // Tarifas y endpoints tomados literalmente de las bases del hackathon (.cursorrules / material/README.md).
+// Solo usamos proveedores locales (Ollama): Groq queda excluido a propósito.
 const DEFAULT_MODELS = [
     { model_id: 'llama3.2:3b', provider: 'Provider A (Ollama local)', input_cost_per_million: 0.06, output_cost_per_million: 0.06, base_url: 'http://127.0.0.1:11434/v1' },
-    { model_id: 'mistral:7b', provider: 'Provider B (Ollama local)', input_cost_per_million: 0.24, output_cost_per_million: 0.24, base_url: 'http://127.0.0.1:11435/v1' },
-    { model_id: 'llama-3.1-8b-instant', provider: 'Provider C (Groq cloud)', input_cost_per_million: 0.05, output_cost_per_million: 0.08, base_url: 'https://api.groq.com/openai/v1' }
+    { model_id: 'mistral:7b', provider: 'Provider B (Ollama local)', input_cost_per_million: 0.24, output_cost_per_million: 0.24, base_url: 'http://127.0.0.1:11435/v1' }
 ];
+
+// Modelos que ya no se ofrecen. Si existían en una BD previa, los desactivamos
+// para que desaparezcan del catálogo (GET /v1/models) sin romper el histórico
+// de audit_logs que pudiera referenciarlos.
+const RETIRED_MODEL_IDS = ['llama-3.1-8b-instant'];
 
 // El modelo más caro del catálogo se usa como "línea base" para calcular
 // cuánto se ahorró al enrutar a un modelo más barato en cada request.
@@ -120,6 +125,11 @@ async function initializeDatabase() {
              VALUES (?, ?, ?, ?, ?, 1)`,
             model.model_id, model.provider, model.input_cost_per_million, model.output_cost_per_million, model.base_url
         );
+    }
+
+    // Desactivamos modelos retirados (p. ej. Groq) si estaban en una BD previa.
+    for (const retiredId of RETIRED_MODEL_IDS) {
+        await db.run(`UPDATE models SET is_active = 0 WHERE model_id = ?`, retiredId);
     }
 
     for (const consumer of DEFAULT_CONSUMERS) {
@@ -450,8 +460,155 @@ async function getFlowDashboardData() {
     };
 }
 
+// ──────────────────────── SEED DE DEMO (datos hardcodeados) ────────────────────────
+// Generador pseudoaleatorio determinista: misma semilla => mismos datos siempre,
+// para que la demo sea reproducible ("datos perfectos" y estables).
+function mulberry32(seed) {
+    return function () {
+        seed |= 0;
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function formatTimestamp(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+        `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function pickWeighted(items, rand) {
+    const total = items.reduce((acc, it) => acc + it.weight, 0);
+    let r = rand() * total;
+    for (const it of items) {
+        r -= it.weight;
+        if (r <= 0) return it;
+    }
+    return items[items.length - 1];
+}
+
+/**
+ * Rellena la base de datos con un histórico realista de 14 días para la demo:
+ * varios equipos, varias personas por equipo, decisiones de routing coherentes,
+ * y presupuestos ajustados para dejar un equipo BLOQUEADO (>100%), otro CRÍTICO
+ * (~93%), uno en aviso y otro holgado. Es idempotente: borra y regenera.
+ */
+async function seedDemoData() {
+    await initializeDatabase();
+    const db = await getDb();
+    const rand = mulberry32(20260701);
+
+    const rates = {};
+    for (const m of DEFAULT_MODELS) rates[m.model_id] = m;
+    const baseline = rates[BASELINE_MODEL_ID];
+
+    // targetRatio = gasto / presupuesto deseado al final del seed.
+    // Volúmenes altos (cargas corporativas con contexto largo) para que el gasto
+    // y los presupuestos se lean en dólares y no en céntimos.
+    const teams = [
+        { id: 'equipo-ingenieria', users: ['Alejandro', 'Laura', 'Marc', 'Nuria'], perDay: [30, 50], targetRatio: 0.62 },
+        { id: 'equipo-marketing', users: ['Sofía', 'Diego', 'Elena'], perDay: [25, 45], targetRatio: 1.08 },
+        { id: 'equipo-ventas', users: ['Carlos', 'Marta', 'Iván'], perDay: [28, 48], targetRatio: 0.93 },
+        { id: 'equipo-soporte', users: ['Paula', 'Hugo'], perDay: [12, 25], targetRatio: 0.45 }
+    ];
+
+    const routingChoices = [
+        { method: 'default_low_cost', model: 'llama3.2:3b', reason: 'Tarea simple o general. Priorizamos el modelo base de bajo coste.', weight: 5 },
+        { method: 'quality_reasoning_keywords', model: 'mistral:7b', reason: 'Prompt corto pero de razonamiento/código. Priorizamos calidad con Mistral.', weight: 3 },
+        { method: 'cost_guardrail_long_prompt', model: 'llama3.2:3b', reason: 'Prompt largo. Priorizamos el modelo de menor coste.', weight: 2 }
+    ];
+
+    const DAYS = 14;
+    const now = Date.now();
+
+    await db.exec('BEGIN TRANSACTION');
+    try {
+        await db.run('DELETE FROM audit_logs');
+        await db.run('DELETE FROM notifications');
+        await db.run('UPDATE consumers SET current_spend_usd = 0');
+
+        const spendByTeam = {};
+
+        for (const team of teams) {
+            spendByTeam[team.id] = 0;
+            for (let d = DAYS - 1; d >= 0; d--) {
+                const count = team.perDay[0] + Math.floor(rand() * (team.perDay[1] - team.perDay[0] + 1));
+                for (let i = 0; i < count; i++) {
+                    const choice = pickWeighted(routingChoices, rand);
+                    const model = rates[choice.model];
+
+                    const promptTokens = choice.method === 'cost_guardrail_long_prompt'
+                        ? 150000 + Math.floor(rand() * 110000)
+                        : 90000 + Math.floor(rand() * 60000);
+                    const completionTokens = Math.max(300, Math.floor(promptTokens * (0.12 + rand() * 0.08)));
+
+                    const cost = (promptTokens / 1_000_000) * model.input_cost_per_million +
+                        (completionTokens / 1_000_000) * model.output_cost_per_million;
+
+                    let savings = 0;
+                    if (choice.model !== BASELINE_MODEL_ID) {
+                        const baselineCost = (promptTokens / 1_000_000) * baseline.input_cost_per_million +
+                            (completionTokens / 1_000_000) * baseline.output_cost_per_million;
+                        savings = Math.max(0, baselineCost - cost);
+                    }
+
+                    const user = team.users[Math.floor(rand() * team.users.length)];
+                    const dt = new Date(now - d * 86400000);
+                    dt.setHours(8 + Math.floor(rand() * 11), Math.floor(rand() * 60), Math.floor(rand() * 60), 0);
+
+                    await db.run(
+                        `INSERT INTO audit_logs (
+                            consumer_id, user_name, requested_model, target_model,
+                            prompt_tokens, completion_tokens, total_cost_usd, estimated_savings_usd,
+                            routing_method, routing_reason, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        team.id, user, null, choice.model,
+                        promptTokens, completionTokens, cost, savings,
+                        choice.method, choice.reason, formatTimestamp(dt)
+                    );
+
+                    spendByTeam[team.id] += cost;
+                }
+            }
+        }
+
+        // Presupuesto derivado del gasto real para clavar el ratio objetivo.
+        for (const team of teams) {
+            const spend = spendByTeam[team.id];
+            const budget = Math.max(0.01, Number((spend / team.targetRatio).toFixed(2)));
+            await db.run(
+                'UPDATE consumers SET monthly_budget_usd = ?, current_spend_usd = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                budget, spend, team.id
+            );
+        }
+
+        await db.exec('COMMIT');
+    } catch (error) {
+        await db.exec('ROLLBACK');
+        throw error;
+    }
+
+    // Notificaciones históricas coherentes con el estado final de cada equipo.
+    for (const team of teams) {
+        const c = await getConsumerById(team.id);
+        const ratio = c.monthly_budget_usd > 0 ? c.current_spend_usd / c.monthly_budget_usd : 0;
+        if (ratio >= 1) {
+            await insertNotification({ consumerId: c.id, level: 'blocked', message: `${c.name}: presupuesto mensual agotado. Gastado $${c.current_spend_usd.toFixed(4)} de $${c.monthly_budget_usd.toFixed(2)}. Nuevas peticiones bloqueadas.` });
+        } else if (ratio >= 0.9) {
+            await insertNotification({ consumerId: c.id, level: 'critical', message: `${c.name} ha superado el ${Math.round(ratio * 100)}% de su presupuesto. Enrutando solo al modelo más barato.` });
+        } else if (ratio >= 0.8) {
+            await insertNotification({ consumerId: c.id, level: 'warning', message: `${c.name} ha usado el ${Math.round(ratio * 100)}% de su presupuesto mensual.` });
+        }
+    }
+
+    return { teams: teams.length };
+}
+
 module.exports = {
     initializeDatabase,
+    seedDemoData,
     getConsumerById,
     listConsumers,
     getModelById,

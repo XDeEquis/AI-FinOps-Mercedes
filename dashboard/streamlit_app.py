@@ -423,7 +423,47 @@ with tab_models:
 
 # ═══════════════ PROYECCIÓN ═══════════════
 with tab_forecast:
-    st.markdown("##### Proyección en vivo por solicitud")
+    st.markdown("#### Qué gastaremos si seguimos a este ritmo")
+    st.markdown(
+        '<p class="section-caption">Estimación del gasto a fin de mes calculada con el ritmo de consumo actual. '
+        'Pensada para leerse de un vistazo: la conclusión en texto está arriba; el detalle técnico (regresión y '
+        'gráficas), debajo.</p>',
+        unsafe_allow_html=True
+    )
+
+    # ── Titular interpretable por cualquiera ──
+    total_budget = float(overview.get("total_monthly_budget_usd", 0))
+    projected = float(overview.get("projected_monthly_spend_usd", 0))
+    current = float(overview.get("current_spend_usd", 0))
+    proj_ratio = (projected / total_budget) if total_budget > 0 else 0
+
+    if projected > total_budget and total_budget > 0:
+        estado, color_estado = "Se superará el presupuesto", COLOR["danger"]
+    elif proj_ratio >= 0.9:
+        estado, color_estado = "Al límite del presupuesto", COLOR["critical"]
+    elif proj_ratio >= 0.75:
+        estado, color_estado = "Consumo alto pero dentro de presupuesto", COLOR["warning"]
+    else:
+        estado, color_estado = "Dentro de presupuesto", COLOR["success"]
+
+    hc1, hc2, hc3 = st.columns(3)
+    hc1.metric("Gastado hasta ahora", money(current))
+    hc2.metric("Proyección a fin de mes", money(projected), help="Ritmo medio diario multiplicado por 30 días.")
+    hc3.metric("Sobre el presupuesto total", pct(proj_ratio))
+
+    st.markdown(
+        f'<div style="border-left:4px solid {color_estado};background:{COLOR["bg_card"]};'
+        f'padding:14px 18px;border-radius:8px;margin:6px 0 4px 0;">'
+        f'<strong style="color:{color_estado};">{estado}.</strong> '
+        f'Si el equipo sigue usando la IA como en los últimos días, a fin de mes habrá gastado unos '
+        f'<strong>{money(projected)}</strong> de un presupuesto de <strong>{money(total_budget)}</strong> '
+        f'({pct(proj_ratio)}).</div>',
+        unsafe_allow_html=True
+    )
+    st.caption("Cómo se calcula: coste medio por día del histórico reciente, extrapolado a 30 días.")
+
+    st.divider()
+    st.markdown("##### Detalle técnico: proyección en vivo por solicitud")
     st.markdown(
         '<p class="section-caption">Regresión sobre el histórico de solicitudes auditadas: no depende de días de '
         'histórico, así que puede consultarse durante la propia demo tras un par de mensajes en el chat.</p>',
