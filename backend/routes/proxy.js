@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const sqlite3 = require('sqlite3').verbose();
 // const axios = require('axios'); // Descomentar al final del hackathon
-// const db = require('../db');    // Lo crearemos en el siguiente paso para PostgreSQL
+
+const db = new sqlite3.Database('./finops.sqlite', (err) => {
+    if (err) console.error("Error al abrir SQLite en el proxy:", err.message);
+});
 
 // Tarifas extraídas de las bases del hackathon (Coste por 1 Millón de Tokens en USD)
 const PRICING = {
@@ -28,64 +32,82 @@ router.post('/v1/chat/completions', async (req, res, next) => {
         console.log(`\n[PROXY] 🚦 Petición de [${consumerId}] | Modelo solicitado: ${requestedModel}`);
 
         // 2. CONTROL DE PRESUPUESTO Y GOBERNANZA (Pilar 2)
-        // TODO: Reemplazar con consulta real a PostgreSQL: SELECT monthly_budget_usd, current_spend_usd FROM consumers...
-        const currentSpend = 4.80;   // Dato simulado temporal
-        const monthlyBudget = 5.00;  // Dato simulado temporal
+        db.get(`SELECT presupuesto_maximo, gasto_acumulado FROM consumidores WHERE id = ?`, [consumerId], async (err, row) => {
+            if (err) return res.status(500).json({ error: "Error al consultar la base de datos" });
+            if (!row) return res.status(404).json({ error: `Consumidor '${consumerId}' no registrado en FinOps` });
 
-        if (currentSpend >= monthlyBudget) {
-            console.log(`[FINOPS] 🛑 BLOQUEO: Presupuesto agotado para ${consumerId}.`);
-            return res.status(403).json({ error: "Presupuesto mensual de IA agotado. Contacta con Finanzas." });
-        }
+            const currentSpend = row.gasto_acumulado;
+            const monthlyBudget = row.presupuesto_maximo;
 
-        // 3. ENRUTAMIENTO INTELIGENTE Y OPTIMIZACIÓN (Pilar 3)
-        let targetModel = requestedModel || 'llama3.2:3b';
-        let routingReason = "Modelo por defecto solicitado.";
+            // Bloqueo si ya no hay dinero
+            if (currentSpend >= monthlyBudget) {
+                console.log(`[FINOPS] 🛑 BLOQUEO: Presupuesto agotado para ${consumerId}.`);
+                return res.status(403).json({ 
+                    error: "Presupuesto mensual de IA agotado.",
+                    detail: `Has gastado $${currentSpend.toFixed(4)} de tus $${monthlyBudget} permitidos.`
+                });
+            }
 
-        // Regla A: Degradación por presupuesto crítico (>90% gastado)
-        if (currentSpend > (monthlyBudget * 0.90)) {
-            targetModel = 'llama3.2:3b';
-            routingReason = "Presupuesto crítico (>90%). Forzando modelo con coste de salida más económico.";
-        }
-        // Regla B: Ahorro en prompts masivos (>200 caracteres de ejemplo)
-        else if (promptString.length > 200) {
-            targetModel = 'llama-3.1-8b-instant';
-            routingReason = "Prompt extenso detectado. Enrutando a Groq por tener el coste de input más bajo ($0.05).";
-        }
+            let targetModel = requestedModel || 'llama3.2:3b';
+            let routingReason = "Modelo por defecto solicitado.";
 
-        console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Motivo: ${routingReason}`);
+            const tokensEstimadosInput = Math.ceil(promptString.length / 4);
 
-        // 4. LLAMADA AL PROVEEDOR LLM
-        // TODO: Aquí iría la llamada real con Axios usando targetModel.
-        // Simulamos la respuesta y el consumo de tokens para poder programar la BBDD:
-        const estimatedPromptTokens = Math.ceil(promptString.length / 4); // Regla general empírica
-        const simulatedCompletionTokens = 45;
+            // Vuestra nueva regla de Longitud/Palabras clave:
+            const palabrasComplejas = ["programa", "analiza", "razona", "resume"];
+            const requiereAltoRazonamiento = palabrasComplejas.some(p => promptString.toLowerCase().includes(p));
 
-        const usage = {
-            prompt_tokens: estimatedPromptTokens,
-            completion_tokens: simulatedCompletionTokens
-        };
+            if (tokensEstimadosInput > 100) {
+                targetModel = 'llama3.2:3b'; // Forzamos el barato por ser prompt caro
+                routingReason = `Prompt Caro (${tokensEstimadosInput} tokens). Enrutando a Modelo Barato para ahorrar.`;
+            } else if (requiereAltoRazonamiento) {
+                targetModel = 'mistral:7b';
+                routingReason = "Prompt Corto pero Complejo. Requiere alta capacidad de Mistral.";
+            } else {
+                targetModel = 'llama3.2:3b';
+                routingReason = "Tarea trivial o corta. Enrutando a Modelo Base.";
+            }
 
-        const mockResponse = {
-            model: targetModel,
-            choices: [{ message: { role: "assistant", content: `Respuesta generada desde ${targetModel}` } }],
-            usage: usage
-        };
+            console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Motivo: ${routingReason}`);
 
-        // 5. CÁLCULO DE COSTES EXACTOS
-        const modelPricing = PRICING[targetModel];
-        const costInput = (usage.prompt_tokens / 1000000) * modelPricing.input;
-        const costOutput = (usage.completion_tokens / 1000000) * modelPricing.output;
-        const totalCostUsd = costInput + costOutput;
+            // 4. LLAMADA AL PROVEEDOR LLM (Simulada por ahora)
+            const estimatedPromptTokens = tokensEstimadosInput;
+            const simulatedCompletionTokens = 45;
 
-        console.log(`[FINOPS] 💰 Tokens: In(${usage.prompt_tokens}) Out(${usage.completion_tokens})`);
-        console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)}`);
+            const usage = {
+                prompt_tokens: estimatedPromptTokens,
+                completion_tokens: simulatedCompletionTokens
+            };
 
-        // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO
-        // TODO: Hacer el INSERT en 'audit_logs' y el UPDATE en 'consumers' en PostgreSQL.
+            const mockResponse = {
+                model: targetModel,
+                choices: [{ message: { role: "assistant", content: `Respuesta simulada generada desde ${targetModel}` } }],
+                usage: usage
+            };
 
-        // 7. RESPONDER AL USUARIO
-        res.json(mockResponse);
+            // 5. CÁLCULO DE COSTES EXACTOS
+            const modelPricing = PRICING[targetModel];
+            const costInput = (usage.prompt_tokens / 1000000) * modelPricing.input;
+            const costOutput = (usage.completion_tokens / 1000000) * modelPricing.output;
+            const totalCostUsd = costInput + costOutput;
 
+            console.log(`[FINOPS] 💰 Tokens: In(${usage.prompt_tokens}) Out(${usage.completion_tokens})`);
+            console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)}`);
+
+            // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2)
+            // 🗄️ INTEGRACIÓN SQLITE: Ejecutamos los cambios de forma secuencial
+            db.serialize(() => {
+                // Actualizamos el gasto del consumidor sumando el coste de esta llamada
+                db.run(`UPDATE consumidores SET gasto_acumulado = gasto_acumulado + ? WHERE id = ?`, [totalCostUsd, consumerId]);
+
+                // Insertamos la fila en el historial de auditoría
+                db.run(`INSERT INTO auditoria_llamadas (consumidor_id, modelo_usado, tokens_input, tokens_output, coste_total) 
+                        VALUES (?, ?, ?, ?, ?)`, [consumerId, targetModel, usage.prompt_tokens, usage.completion_tokens, totalCostUsd]);
+            });
+
+            // 7. RESPONDER AL USUARIO
+            return res.json(mockResponse);
+        });
     } catch (error) {
         console.error("[PROXY ERROR] ❌", error.message);
         res.status(500).json({ error: "Fallo interno en la capa de IA FinOps." });
