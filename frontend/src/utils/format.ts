@@ -5,8 +5,7 @@
 export function formatUsd(value: number | undefined | null): string {
   const v = Number(value || 0)
   if (v === 0) return '0.00'
-  if (v >= 0.01) return v.toFixed(4)
-  return v.toFixed(8)
+  return v.toFixed(6)
 }
 
 export function formatPct(ratio: number | undefined | null): string {

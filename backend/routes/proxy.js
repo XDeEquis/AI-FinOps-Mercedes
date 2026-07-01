@@ -345,6 +345,29 @@ router.post('/v1/chat/completions', async (req, res) => {
             return res.status(503).json({ error: `El modelo elegido no está disponible: ${targetModel}` });
         }
 
+        // 3b. VALIDACIÓN PROACTIVA DE PRESUPUESTO (Control preventivo de tokens)
+        // Estimamos el coste total del prompt (tokens del prompt del usuario + historial y contexto base estimado de 12,000 tokens)
+        const estimatedTokens = tokensEstimadosInput + 12000;
+        const estimatedInputCost = (estimatedTokens / 1_000_000) * targetModelRow.input_cost_per_million;
+        const remainingBudget = monthlyBudget - currentSpend;
+
+        if (estimatedInputCost > remainingBudget) {
+            console.log(`[FINOPS] 🛑 BLOQUEO PREVENTIVO: Los tokens del prompt superan el presupuesto restante para ${consumerId}.`);
+            const blockMessage = `${consumer.name}: Petición rechazada. El coste de tokens estimado ($${estimatedInputCost.toFixed(6)}) supera el presupuesto restante ($${remainingBudget.toFixed(6)}).`;
+            const alert = await emitAlert({ consumerId, level: 'blocked', message: blockMessage });
+            return res.status(403).json({
+                error: 'Presupuesto insuficiente para procesar esta consulta.',
+                detail: `El coste estimado de tu consulta ($${estimatedInputCost.toFixed(6)}) supera tus $${remainingBudget.toFixed(6)} permitidos restantes.`,
+                alert,
+                finops: {
+                    consumer_id: consumerId,
+                    current_spend_usd: Number(currentSpend.toFixed(8)),
+                    monthly_budget_usd: Number(monthlyBudget.toFixed(2)),
+                    remaining_budget_usd: Number(Math.max(0, remainingBudget).toFixed(8))
+                }
+            });
+        }
+
         console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Método: ${routingMethod} | Motivo: ${routingReason}`);
 
         // 4. LLAMADA AL PROVEEDOR (real si ENABLE_REAL_PROVIDERS=true, si no, simulada)
@@ -357,8 +380,12 @@ router.post('/v1/chat/completions', async (req, res) => {
             usage = providerResponse.usage;
             assistantContent = providerResponse.choices?.[0]?.message?.content || '(respuesta vacía del proveedor)';
         } else {
-            const simulatedCompletionTokens = Math.max(30, Math.ceil(tokensEstimadosInput * 0.35));
-            usage = { prompt_tokens: tokensEstimadosInput, completion_tokens: simulatedCompletionTokens };
+            // Simulamos un contexto real sumando un buffer base (system prompt + historial + contexto) de 10k a 20k tokens.
+            // Esto hace que el consumo de tokens y el coste sean realistas para peticiones corporativas y aumenten de forma visible.
+            const baseTokens = Math.floor(Math.random() * 10000) + 10000;
+            const promptTokens = tokensEstimadosInput + baseTokens;
+            const simulatedCompletionTokens = Math.max(150, Math.ceil(promptTokens * 0.15));
+            usage = { prompt_tokens: promptTokens, completion_tokens: simulatedCompletionTokens };
             assistantContent = `Respuesta simulada generada desde ${targetModel}. (Modo simulación: activa ENABLE_REAL_PROVIDERS=true tras 'docker compose up' para respuestas reales)`;
         }
 
@@ -401,13 +428,21 @@ router.post('/v1/chat/completions', async (req, res) => {
         const updatedConsumer = await db.getConsumerById(consumerId);
         const updatedRatio = monthlyBudget > 0 ? updatedConsumer.current_spend_usd / monthlyBudget : 0;
 
-        // 6b. NOTIFICACIÓN VISIBLE si el equipo cruza el umbral crítico/de aviso.
+        // 6b. NOTIFICACIÓN VISIBLE si el equipo cruza el umbral crítico/de aviso o queda poco presupuesto.
         let alert = null;
-        if (updatedRatio >= ROUTING_CONFIG.budgetCriticalRatio) {
+        const remainingBudgetAfterThis = monthlyBudget - updatedConsumer.current_spend_usd;
+
+        if (updatedConsumer.current_spend_usd >= monthlyBudget) {
+            alert = await emitAlert({
+                consumerId,
+                level: 'blocked',
+                message: `${consumer.name}: presupuesto mensual agotado. Gastado $${updatedConsumer.current_spend_usd.toFixed(4)} de $${monthlyBudget.toFixed(2)}.`
+            });
+        } else if (remainingBudgetAfterThis <= 0.50) {
             alert = await emitAlert({
                 consumerId,
                 level: 'critical',
-                message: `${consumer.name} ha superado el ${Math.round(updatedRatio * 100)}% de su presupuesto mensual ($${updatedConsumer.current_spend_usd.toFixed(4)} de $${monthlyBudget.toFixed(2)}). Enrutando solo al modelo más barato.`
+                message: `⚠️ ¡Atención! Se están agotando los tokens de tu presupuesto. Quedan menos de $0.50 USD disponibles ($${remainingBudgetAfterThis.toFixed(4)} restantes).`
             });
         } else if (updatedRatio >= ROUTING_CONFIG.budgetWarningRatio) {
             alert = await emitAlert({
