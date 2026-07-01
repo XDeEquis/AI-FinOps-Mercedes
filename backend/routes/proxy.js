@@ -1,116 +1,309 @@
 const express = require('express');
+const axios = require('axios');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-// const axios = require('axios'); // Descomentar al final del hackathon
+const db = require('../db');
 
-const db = new sqlite3.Database('./finops.sqlite', (err) => {
-    if (err) console.error("Error al abrir SQLite en el proxy:", err.message);
-});
+// Activar esto (variable de entorno ENABLE_REAL_PROVIDERS=true) SOLO cuando
+// los contenedores de Ollama estén levantados (docker compose up) y con
+// modelos descargados (task pull). Por defecto seguimos en modo simulación,
+// tal y como pidieron los organizadores para priorizar la lógica FinOps.
+const REAL_PROVIDERS_ENABLED = process.env.ENABLE_REAL_PROVIDERS === 'true';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Tarifas extraídas de las bases del hackathon (Coste por 1 Millón de Tokens en USD)
-const PRICING = {
-    'llama3.2:3b': { input: 0.06, output: 0.06 },           // Provider A (Local)
-    'mistral:7b': { input: 0.24, output: 0.24 },            // Provider B (Local)
-    'llama-3.1-8b-instant': { input: 0.05, output: 0.08 }   // Provider C (Groq)
+const DEFAULT_MODEL = 'llama3.2:3b';
+
+const ROUTING_CONFIG = {
+    budgetCriticalRatio: 0.9,
+    longPromptTokens: 100,
+    models: {
+        cheap: 'llama3.2:3b',
+        reasoning: 'mistral:7b'
+    },
+    // Palabras clave que indican una tarea de razonamiento/código, no de
+    // charla trivial. Usamos \b (límite de palabra) para no disparar con
+    // coincidencias parciales dentro de otras palabras (p. ej. "ruta" no
+    // debe activar "razona").
+    keywordsReasoning: [
+        'programa', 'programar', 'codigo', 'código', 'algoritmo', 'depura', 'depurar',
+        'analiza', 'analizar', 'razona', 'razonar', 'compara', 'comparar',
+        'disena', 'diseña', 'diseñar', 'arquitectura', 'planifica', 'planificar',
+        'resume', 'resumir', 'optimiza', 'optimizar', 'sql', 'consulta', 'query'
+    ]
 };
 
+function buildReasoningRegex() {
+    const escaped = ROUTING_CONFIG.keywordsReasoning.map((word) =>
+        word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    );
+    return new RegExp(`\\b(${escaped.join('|')})\\w*`, 'i');
+}
+
+const REASONING_REGEX = buildReasoningRegex();
+
+function classifyPrompt(promptString, estimatedPromptTokens) {
+    if (estimatedPromptTokens > ROUTING_CONFIG.longPromptTokens) {
+        return {
+            targetModel: ROUTING_CONFIG.models.cheap,
+            routingMethod: 'cost_guardrail_long_prompt',
+            routingReason: `Prompt largo (${estimatedPromptTokens} tokens estimados). Priorizamos el modelo de menor coste.`
+        };
+    }
+
+    if (REASONING_REGEX.test(promptString)) {
+        return {
+            targetModel: ROUTING_CONFIG.models.reasoning,
+            routingMethod: 'quality_reasoning_keywords',
+            routingReason: 'Prompt corto pero de razonamiento/código. Priorizamos calidad con Mistral.'
+        };
+    }
+
+    return {
+        targetModel: ROUTING_CONFIG.models.cheap,
+        routingMethod: 'default_low_cost',
+        routingReason: 'Tarea simple o general. Priorizamos el modelo base de bajo coste.'
+    };
+}
+
+/**
+ * Llama al proveedor real (Ollama u OpenAI-compatible) cuando está activado.
+ * Si falla o está desactivado, se usa una respuesta simulada para no romper
+ * la demo mientras los contenedores no estén disponibles.
+ */
+async function callProvider(modelRow, messages) {
+    if (!REAL_PROVIDERS_ENABLED) {
+        return null;
+    }
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (modelRow.model_id === 'llama-3.1-8b-instant') {
+            if (!GROQ_API_KEY) {
+                console.warn('[PROVIDER] ⚠️ GROQ_API_KEY no configurada. Usando simulación.');
+                return null;
+            }
+            headers.Authorization = `Bearer ${GROQ_API_KEY}`;
+        }
+
+        const response = await axios.post(
+            `${modelRow.base_url}/chat/completions`,
+            { model: modelRow.model_id, messages },
+            { headers, timeout: 15000 }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error(`[PROVIDER ERROR] ❌ ${modelRow.model_id}:`, error.message);
+        return null;
+    }
+}
+
 /* GET Health Check */
-router.get('/', (req, res) => res.json({ status: "ok", message: "AI FinOps Proxy Operativo 🟢" }));
+router.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'AI FinOps Proxy Operativo',
+        real_providers_enabled: REAL_PROVIDERS_ENABLED,
+        timestamp: new Date().toISOString()
+    });
+});
+
+/* GET catálogo de modelos activos (fuente de verdad para el frontend) */
+router.get('/v1/models', async (req, res) => {
+    try {
+        const models = await db.listActiveModels();
+        res.json({ data: models });
+    } catch (error) {
+        console.error('[MODELS ERROR] ❌', error.message);
+        res.status(500).json({ error: 'No fue posible listar los modelos activos.' });
+    }
+});
+
+/* GET resumen de consumo de un consumidor (para el sidebar del frontend) */
+router.get('/v1/consumers/:consumerId/summary', async (req, res) => {
+    try {
+        const summary = await db.getConsumerSummary(req.params.consumerId);
+        if (!summary) {
+            return res.status(404).json({ error: `Consumidor no encontrado: ${req.params.consumerId}` });
+        }
+
+        res.json({
+            id: summary.id,
+            name: summary.name,
+            department: summary.department,
+            monthly_budget_usd: summary.monthly_budget_usd,
+            current_spend_usd: summary.current_spend_usd,
+            remaining_budget_usd: Math.max(0, summary.monthly_budget_usd - summary.current_spend_usd),
+            requests_count: summary.requests_count,
+            total_prompt_tokens: summary.total_prompt_tokens,
+            total_completion_tokens: summary.total_completion_tokens
+        });
+    } catch (error) {
+        console.error('[SUMMARY ERROR] ❌', error.message);
+        res.status(500).json({ error: 'No fue posible calcular el resumen de consumo.' });
+    }
+});
+
+/* GET dataset agregado para dashboard Streamlit / FinOps Flow */
+router.get('/v1/flow-dashboard', async (req, res) => {
+    try {
+        const dashboardData = await db.getFlowDashboardData();
+        res.json(dashboardData);
+    } catch (error) {
+        console.error('[FLOW DASHBOARD ERROR] ❌', error.message);
+        res.status(500).json({ error: 'No fue posible generar los datos del dashboard FinOps.' });
+    }
+});
+
+/* PATCH ajuste manual de presupuesto/gasto — SOLO para demo en vivo (Pilar 2) */
+router.patch('/v1/consumers/:consumerId/spend', async (req, res) => {
+    try {
+        const { current_spend_usd: currentSpendUsd } = req.body;
+        if (typeof currentSpendUsd !== 'number' || currentSpendUsd < 0) {
+            return res.status(400).json({ error: 'current_spend_usd debe ser un número >= 0.' });
+        }
+
+        const consumer = await db.getConsumerById(req.params.consumerId);
+        if (!consumer) {
+            return res.status(404).json({ error: `Consumidor no encontrado: ${req.params.consumerId}` });
+        }
+
+        const updated = await db.setConsumerSpend(req.params.consumerId, currentSpendUsd);
+        res.json(updated);
+    } catch (error) {
+        console.error('[SPEND ERROR] ❌', error.message);
+        res.status(500).json({ error: 'No fue posible actualizar el gasto del consumidor.' });
+    }
+});
 
 /* POST Interceptor Principal */
-router.post('/v1/chat/completions', async (req, res, next) => {
+router.post('/v1/chat/completions', async (req, res) => {
     try {
         // 1. IDENTIDAD Y VISIBILIDAD (Pilar 1)
         const consumerId = req.headers['x-consumer-id'];
         if (!consumerId) {
-            return res.status(400).json({ error: "Falta la cabecera x-consumer-id" });
+            return res.status(400).json({ error: 'Falta la cabecera x-consumer-id' });
         }
 
         const { model: requestedModel, messages } = req.body;
-        const promptString = messages.map(m => m.content).join(" ");
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ error: 'El campo messages debe ser un array no vacío.' });
+        }
 
-        console.log(`\n[PROXY] 🚦 Petición de [${consumerId}] | Modelo solicitado: ${requestedModel}`);
+        const hasInvalidMessage = messages.some(
+            (message) => !message || typeof message.content !== 'string' || message.content.trim().length === 0
+        );
+        if (hasInvalidMessage) {
+            return res.status(400).json({ error: 'Cada message debe incluir content como string no vacío.' });
+        }
+
+        const promptString = messages.map((m) => m.content).join(' ').trim();
+
+        console.log(`\n[PROXY] 🚦 Petición de [${consumerId}] | Modelo solicitado: ${requestedModel || '(auto)'}`);
 
         // 2. CONTROL DE PRESUPUESTO Y GOBERNANZA (Pilar 2)
-        db.get(`SELECT presupuesto_maximo, gasto_acumulado FROM consumidores WHERE id = ?`, [consumerId], async (err, row) => {
-            if (err) return res.status(500).json({ error: "Error al consultar la base de datos" });
-            if (!row) return res.status(404).json({ error: `Consumidor '${consumerId}' no registrado en FinOps` });
+        const consumer = await db.getConsumerById(consumerId);
+        if (!consumer) {
+            return res.status(404).json({ error: `Consumidor '${consumerId}' no registrado en FinOps` });
+        }
 
-            const currentSpend = row.gasto_acumulado;
-            const monthlyBudget = row.presupuesto_maximo;
+        const currentSpend = consumer.current_spend_usd;
+        const monthlyBudget = consumer.monthly_budget_usd;
 
-            // Bloqueo si ya no hay dinero
-            if (currentSpend >= monthlyBudget) {
-                console.log(`[FINOPS] 🛑 BLOQUEO: Presupuesto agotado para ${consumerId}.`);
-                return res.status(403).json({ 
-                    error: "Presupuesto mensual de IA agotado.",
-                    detail: `Has gastado $${currentSpend.toFixed(4)} de tus $${monthlyBudget} permitidos.`
-                });
-            }
-
-            let targetModel = requestedModel || 'llama3.2:3b';
-            let routingReason = "Modelo por defecto solicitado.";
-
-            const tokensEstimadosInput = Math.ceil(promptString.length / 4);
-
-            // Vuestra nueva regla de Longitud/Palabras clave:
-            const palabrasComplejas = ["programa", "analiza", "razona", "resume"];
-            const requiereAltoRazonamiento = palabrasComplejas.some(p => promptString.toLowerCase().includes(p));
-
-            if (tokensEstimadosInput > 100) {
-                targetModel = 'llama3.2:3b'; // Forzamos el barato por ser prompt caro
-                routingReason = `Prompt Caro (${tokensEstimadosInput} tokens). Enrutando a Modelo Barato para ahorrar.`;
-            } else if (requiereAltoRazonamiento) {
-                targetModel = 'mistral:7b';
-                routingReason = "Prompt Corto pero Complejo. Requiere alta capacidad de Mistral.";
-            } else {
-                targetModel = 'llama3.2:3b';
-                routingReason = "Tarea trivial o corta. Enrutando a Modelo Base.";
-            }
-
-            console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Motivo: ${routingReason}`);
-
-            // 4. LLAMADA AL PROVEEDOR LLM (Simulada por ahora)
-            const estimatedPromptTokens = tokensEstimadosInput;
-            const simulatedCompletionTokens = 45;
-
-            const usage = {
-                prompt_tokens: estimatedPromptTokens,
-                completion_tokens: simulatedCompletionTokens
-            };
-
-            const mockResponse = {
-                model: targetModel,
-                choices: [{ message: { role: "assistant", content: `Respuesta simulada generada desde ${targetModel}` } }],
-                usage: usage
-            };
-
-            // 5. CÁLCULO DE COSTES EXACTOS
-            const modelPricing = PRICING[targetModel];
-            const costInput = (usage.prompt_tokens / 1000000) * modelPricing.input;
-            const costOutput = (usage.completion_tokens / 1000000) * modelPricing.output;
-            const totalCostUsd = costInput + costOutput;
-
-            console.log(`[FINOPS] 💰 Tokens: In(${usage.prompt_tokens}) Out(${usage.completion_tokens})`);
-            console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)}`);
-
-            // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2)
-            // 🗄️ INTEGRACIÓN SQLITE: Ejecutamos los cambios de forma secuencial
-            db.serialize(() => {
-                // Actualizamos el gasto del consumidor sumando el coste de esta llamada
-                db.run(`UPDATE consumidores SET gasto_acumulado = gasto_acumulado + ? WHERE id = ?`, [totalCostUsd, consumerId]);
-
-                // Insertamos la fila en el historial de auditoría
-                db.run(`INSERT INTO auditoria_llamadas (consumidor_id, modelo_usado, tokens_input, tokens_output, coste_total) 
-                        VALUES (?, ?, ?, ?, ?)`, [consumerId, targetModel, usage.prompt_tokens, usage.completion_tokens, totalCostUsd]);
+        if (currentSpend >= monthlyBudget) {
+            console.log(`[FINOPS] 🛑 BLOQUEO: Presupuesto agotado para ${consumerId}.`);
+            return res.status(403).json({
+                error: 'Presupuesto mensual de IA agotado.',
+                detail: `Has gastado $${currentSpend.toFixed(4)} de tus $${monthlyBudget.toFixed(2)} permitidos.`
             });
+        }
 
-            // 7. RESPONDER AL USUARIO
-            return res.json(mockResponse);
+        // 3. ENRUTAMIENTO INTELIGENTE (Pilar 3)
+        const tokensEstimadosInput = Math.ceil(promptString.length / 4) || 1;
+
+        let targetModel = requestedModel || DEFAULT_MODEL;
+        let routingMethod = 'manual_request_honored';
+        let routingReason = 'Se respeta el modelo solicitado por el cliente.';
+
+        if (currentSpend >= monthlyBudget * ROUTING_CONFIG.budgetCriticalRatio) {
+            targetModel = ROUTING_CONFIG.models.cheap;
+            routingMethod = 'budget_guardrail_critical';
+            routingReason = 'Presupuesto crítico (>90%). Se fuerza el modelo de menor coste.';
+        } else if (!requestedModel) {
+            const decision = classifyPrompt(promptString, tokensEstimadosInput);
+            targetModel = decision.targetModel;
+            routingMethod = decision.routingMethod;
+            routingReason = decision.routingReason;
+        } else {
+            const requestedModelRow = await db.getModelById(requestedModel);
+            if (!requestedModelRow) {
+                targetModel = ROUTING_CONFIG.models.cheap;
+                routingMethod = 'fallback_invalid_requested_model';
+                routingReason = `Modelo solicitado no soportado: ${requestedModel}. Fallback a ${ROUTING_CONFIG.models.cheap}.`;
+            }
+        }
+
+        const targetModelRow = await db.getModelById(targetModel);
+        if (!targetModelRow) {
+            return res.status(503).json({ error: `El modelo elegido no está disponible: ${targetModel}` });
+        }
+
+        console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Método: ${routingMethod} | Motivo: ${routingReason}`);
+
+        // 4. LLAMADA AL PROVEEDOR (real si ENABLE_REAL_PROVIDERS=true, si no, simulada)
+        const providerResponse = await callProvider(targetModelRow, messages);
+
+        let usage;
+        let assistantContent;
+
+        if (providerResponse && providerResponse.usage) {
+            usage = providerResponse.usage;
+            assistantContent = providerResponse.choices?.[0]?.message?.content || '(respuesta vacía del proveedor)';
+        } else {
+            const simulatedCompletionTokens = Math.max(30, Math.ceil(tokensEstimadosInput * 0.35));
+            usage = { prompt_tokens: tokensEstimadosInput, completion_tokens: simulatedCompletionTokens };
+            assistantContent = `Respuesta simulada generada desde ${targetModel}. (Modo simulación: activa ENABLE_REAL_PROVIDERS=true tras 'docker compose up' para respuestas reales)`;
+        }
+
+        // 5. CÁLCULO DE COSTES EXACTOS (precios reales desde la tabla `models`)
+        const costInput = (usage.prompt_tokens / 1_000_000) * targetModelRow.input_cost_per_million;
+        const costOutput = (usage.completion_tokens / 1_000_000) * targetModelRow.output_cost_per_million;
+        const totalCostUsd = costInput + costOutput;
+
+        console.log(`[FINOPS] 💰 Tokens: In(${usage.prompt_tokens}) Out(${usage.completion_tokens})`);
+        console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)}`);
+
+        // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2), en transacción
+        await db.recordUsageAndUpdateSpend({
+            consumerId,
+            requestedModel,
+            targetModel,
+            promptTokens: usage.prompt_tokens,
+            completionTokens: usage.completion_tokens,
+            totalCostUsd,
+            routingMethod,
+            routingReason
+        });
+
+        const updatedConsumer = await db.getConsumerById(consumerId);
+
+        // 7. RESPONDER AL USUARIO (formato OpenAI-like + bloque finops)
+        return res.json({
+            model: targetModel,
+            choices: [{ message: { role: 'assistant', content: assistantContent } }],
+            usage,
+            finops: {
+                consumer_id: consumerId,
+                routing_method: routingMethod,
+                routing_reason: routingReason,
+                cost_usd: Number(totalCostUsd.toFixed(8)),
+                current_spend_usd: Number(updatedConsumer.current_spend_usd.toFixed(8)),
+                monthly_budget_usd: Number(monthlyBudget.toFixed(2)),
+                remaining_budget_usd: Number(Math.max(0, monthlyBudget - updatedConsumer.current_spend_usd).toFixed(8))
+            }
         });
     } catch (error) {
-        console.error("[PROXY ERROR] ❌", error.message);
-        res.status(500).json({ error: "Fallo interno en la capa de IA FinOps." });
+        console.error('[PROXY ERROR] ❌', error.message);
+        res.status(500).json({ error: 'Fallo interno en la capa de IA FinOps.' });
     }
 });
 

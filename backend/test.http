@@ -1,13 +1,90 @@
+### Healthcheck
+GET http://localhost:3000/
+
+### Catálogo de modelos activos (fuente de verdad de precios)
+GET http://localhost:3000/v1/models
+
+### Resumen de consumo de un consumidor
+GET http://localhost:3000/v1/consumers/equipo-marketing/summary
+
+### Caso 1: Prompt simple -> llama3.2:3b (default_low_cost)
 POST http://localhost:3000/v1/chat/completions
 Content-Type: application/json
 x-consumer-id: equipo-marketing
 
 {
-  "model": "llama3.2:3b",
+  "messages": [
+    { "role": "user", "content": "Hola, ¿qué tal estás hoy?" }
+  ]
+}
+
+### Caso 2: Prompt corto de razonamiento -> mistral:7b (quality_reasoning_keywords)
+POST http://localhost:3000/v1/chat/completions
+Content-Type: application/json
+x-consumer-id: equipo-ingenieria
+
+{
+  "messages": [
+    { "role": "user", "content": "Analiza y razona las diferencias principales entre SQL y NoSQL." }
+  ]
+}
+
+### Caso 3: Prompt largo -> llama3.2:3b por guardrail de coste (cost_guardrail_long_prompt)
+POST http://localhost:3000/v1/chat/completions
+Content-Type: application/json
+x-consumer-id: equipo-marketing
+
+{
   "messages": [
     {
       "role": "user",
-      "content": "¿Cuál es la capital de Francia? Responde en una palabra."
+      "content": "Necesito que revises esta propuesta completa con muchos detalles de contexto para una campana internacional en varios paises, incluyendo audiencias, canales, costes por segmento, riesgo operacional, plan de contingencia, cronograma semanal y KPIs de exito para el trimestre con notas adicionales para que quede todo documentado."
     }
   ]
+}
+
+### Caso 4: Simular presupuesto crítico (>90%) para forzar degradación a modelo barato
+PATCH http://localhost:3000/v1/consumers/equipo-ingenieria/spend
+Content-Type: application/json
+
+{
+  "current_spend_usd": 4.75
+}
+
+### Caso 5: Con el presupuesto crítico ya fijado, incluso un prompt de razonamiento debe caer en llama3.2:3b
+POST http://localhost:3000/v1/chat/completions
+Content-Type: application/json
+x-consumer-id: equipo-ingenieria
+
+{
+  "messages": [
+    { "role": "user", "content": "Analiza y razona la mejor arquitectura para este sistema." }
+  ]
+}
+
+### Caso 6: Simular presupuesto agotado -> debe bloquear con 403
+PATCH http://localhost:3000/v1/consumers/equipo-ingenieria/spend
+Content-Type: application/json
+
+{
+  "current_spend_usd": 5.00
+}
+
+###
+POST http://localhost:3000/v1/chat/completions
+Content-Type: application/json
+x-consumer-id: equipo-ingenieria
+
+{
+  "messages": [
+    { "role": "user", "content": "Hola" }
+  ]
+}
+
+### Caso 7: Resetear presupuesto de vuelta a 0 para seguir haciendo demo
+PATCH http://localhost:3000/v1/consumers/equipo-ingenieria/spend
+Content-Type: application/json
+
+{
+  "current_spend_usd": 0
 }
