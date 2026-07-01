@@ -66,11 +66,11 @@ export function FinOpsSidebar({
       animate={{ opacity: 1, x: 0 }}
       className="glass-panel"
       style={{ 
-        width: '24rem', 
-        padding: '2rem',
+        width: '340px', 
+        padding: '32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '1.5rem',
+        gap: '40px',
         height: '100%',
         boxSizing: 'border-box'
       }}
@@ -129,7 +129,7 @@ export function FinOpsSidebar({
       </div>
       
       {/* Footer controls space */}
-      <div style={{ marginTop: 'auto', paddingBottom: '0.5rem' }}>
+      <div style={{ marginTop: 'auto' }}>
         {children}
       </div>
     </motion.div>
