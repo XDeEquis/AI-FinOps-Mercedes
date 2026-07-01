@@ -26,57 +26,64 @@ export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input }
     setMessages(prev => [...prev, userMsg])
+    const currentInput = input
     setInput('')
     setIsTyping(true)
 
-    // Simulador de respuesta del Proxy personalizado según departamento
-    setTimeout(() => {
-      const isComplex = input.length > 50
-      let modelUsed = ''
-      let estimatedCost = 0
-      let responseTemplate = ''
-
-      switch (user.department) {
-        case 'engineering':
-          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama-3.1-8b (Groq)'
-          estimatedCost = isComplex ? 0.00015 : 0.00005
-          responseTemplate = t.deptMockResponse.engineering
-          break
-        case 'marketing':
-          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00015 : 0.00006
-          responseTemplate = t.deptMockResponse.marketing
-          break
-        case 'sales':
-          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00005 : 0.00006
-          responseTemplate = t.deptMockResponse.sales
-          break
-        case 'support':
-        default:
-          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
-          estimatedCost = isComplex ? 0.00005 : 0.00006
-          responseTemplate = t.deptMockResponse.support
-          break
+    try {
+      // Mapeo del departamento al consumerId que espera la BDD
+      const consumerMap: Record<string, string> = {
+        'engineering': 'equipo-ingenieria',
+        'sales': 'equipo-ventas',
+        'support': 'equipo-soporte',
+        'marketing': 'equipo-marketing'
       }
+      const consumerId = consumerMap[user.department] || 'equipo-marketing'
       
-      onMessageSent(estimatedCost)
+      const response = await fetch('http://localhost:3000/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-consumer-id': consumerId
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: currentInput }]
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error?.detail || data.error?.message || data.error || 'Error del servidor')
+      }
+
+      // Descontamos el coste del presupuesto en la UI
+      onMessageSent(data.finops.cost_usd)
       
       const aiMsg: Message = { 
         id: (Date.now() + 1).toString(), 
         role: 'assistant', 
-        content: responseTemplate.replace('{model}', modelUsed),
-        model: modelUsed,
-        cost: estimatedCost
+        content: data.choices[0].message.content,
+        model: data.model,
+        cost: data.finops.cost_usd
       }
       setMessages(prev => [...prev, aiMsg])
+
+    } catch (error: any) {
+      const errorMsg: Message = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: `❌ Error de FinOps: ${error.message}`
+      }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
       setIsTyping(false)
-    }, 1800)
+    }
   }
 
   // Traducción en tiempo real para el primer mensaje (bienvenida)

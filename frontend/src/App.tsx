@@ -103,14 +103,30 @@ export default function App() {
         alignItems: inSidebar ? 'stretch' : 'flex-end'
       }}>
         {user && inSidebar && (
-          <button 
-            onClick={handleLogout}
-            className="header-btn"
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            <LogOut size={16} />
-            {translations[lang].logoutLabel}
-          </button>
+          <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+            <button 
+              onClick={handleLogout}
+              className="header-btn"
+              style={{ flex: 1, justifyContent: 'center', padding: '0 8px' }}
+            >
+              <LogOut size={16} />
+              {translations[lang].logoutLabel}
+            </button>
+            <a 
+              href="http://localhost:8501" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="header-btn"
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                padding: '0 8px',
+                textDecoration: 'none'
+              }}
+            >
+              Dashboard
+            </a>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: inSidebar ? 'space-between' : 'flex-end' }}>
