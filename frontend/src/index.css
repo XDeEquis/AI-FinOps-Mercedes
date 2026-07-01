@@ -10,7 +10,8 @@
   --accent-secondary: #3a86ff;
   --user-msg-bg: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   --ai-msg-bg: rgba(255, 255, 255, 0.04);
-  --font-main: 'Inter', system-ui, sans-serif;
+  --font-main: 'MB Corpo S Text', 'CorpoS', 'Inter', system-ui, sans-serif;
+  --font-title: 'MB Corpo A Title', 'CorpoA', 'Georgia', serif;
   --gradient-1: rgba(157, 78, 221, 0.12);
   --gradient-2: rgba(58, 134, 255, 0.12);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -52,6 +53,10 @@ body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+}
+
 .glass-panel {
   background: var(--panel-bg);
   backdrop-filter: blur(24px);
@@ -69,3 +74,171 @@ body {
 #root {
   height: 100%;
 }
+
+/* Department Themes */
+:root {
+  --accent-glow: rgba(157, 78, 221, 0.25);
+}
+
+:root.dept-marketing {
+  --accent-primary: #9d4edd;
+  --accent-secondary: #3a86ff;
+  --gradient-1: rgba(157, 78, 221, 0.12);
+  --gradient-2: rgba(58, 134, 255, 0.12);
+  --accent-glow: rgba(157, 78, 221, 0.25);
+}
+
+:root.dept-engineering {
+  --accent-primary: #06d6a0;
+  --accent-secondary: #118ab2;
+  --gradient-1: rgba(6, 214, 160, 0.12);
+  --gradient-2: rgba(17, 138, 178, 0.12);
+  --accent-glow: rgba(6, 214, 160, 0.25);
+}
+
+:root.dept-sales {
+  --accent-primary: #ffb703;
+  --accent-secondary: #fb8500;
+  --gradient-1: rgba(255, 183, 3, 0.12);
+  --gradient-2: rgba(251, 133, 0, 0.12);
+  --accent-glow: rgba(255, 183, 3, 0.25);
+}
+
+:root.dept-support {
+  --accent-primary: #ff006e;
+  --accent-secondary: #8338ec;
+  --gradient-1: rgba(255, 0, 110, 0.12);
+  --gradient-2: rgba(131, 56, 236, 0.12);
+  --accent-glow: rgba(255, 0, 110, 0.25);
+}
+
+/* Light mode department adjustments */
+:root.light.dept-marketing {
+  --gradient-1: rgba(157, 78, 221, 0.15);
+  --gradient-2: rgba(58, 134, 255, 0.15);
+}
+:root.light.dept-engineering {
+  --gradient-1: rgba(6, 214, 160, 0.15);
+  --gradient-2: rgba(17, 138, 178, 0.15);
+}
+:root.light.dept-sales {
+  --gradient-1: rgba(255, 183, 3, 0.15);
+  --gradient-2: rgba(251, 133, 0, 0.15);
+}
+:root.light.dept-support {
+  --gradient-1: rgba(255, 0, 110, 0.15);
+  --gradient-2: rgba(131, 56, 236, 0.15);
+}
+
+/* Registration Form Styles */
+.register-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  padding: 20px;
+}
+
+.register-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.register-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.register-subtitle {
+  margin: -16px 0 0 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.register-input,
+.register-select {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.register-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.register-input:focus,
+.register-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.register-select option {
+  background: var(--bg-color);
+  color: var(--text-primary);
+}
+
+.register-btn {
+  width: 100%;
+  height: 52px;
+  background: var(--user-msg-bg);
+  border: none;
+  border-radius: 12px;
+  color: var(--text-inverse);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.register-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.register-btn:active {
+  transform: translateY(0);
+}
+
+
+
+

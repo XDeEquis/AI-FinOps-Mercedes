@@ -1,5 +1,7 @@
 export type Language = 'es' | 'en' | 'de' | 'fr' | 'it' | 'ja' | 'ko';
 
+export type Department = 'marketing' | 'engineering' | 'sales' | 'support';
+
 export const translations = {
   en: {
     team: "Team:",
@@ -10,7 +12,31 @@ export const translations = {
     mockResponse: "*(Mock Response)* I processed your request using **{model}** because it's the most efficient option for this type of task based on our FinOps rules.",
     routing: "Routing:",
     costLabel: "Cost:",
-    inputPlaceholder: "Send a message to the proxy..."
+    inputPlaceholder: "Send a message to the proxy...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   },
   es: {
     team: "Equipo:",
@@ -21,7 +47,31 @@ export const translations = {
     mockResponse: "*(Respuesta simulada)* He procesado tu petición usando **{model}** porque es la opción más eficiente para este tipo de tarea según nuestras reglas de FinOps.",
     routing: "Enrutamiento:",
     costLabel: "Coste:",
-    inputPlaceholder: "Envía un mensaje al proxy..."
+    inputPlaceholder: "Envía un mensaje al proxy...",
+    // New fields
+    registerTitle: "Acceso al Proxy FinOps",
+    registerSubtitle: "Configura el perfil de tu sesión",
+    nameLabel: "Tu Nombre",
+    namePlaceholder: "Introduce tu nombre...",
+    deptLabel: "Departamento",
+    deptMarketing: "Marketing",
+    deptEngineering: "Ingeniería",
+    deptSales: "Ventas",
+    deptSupport: "Soporte",
+    enterBtn: "Ingresar al Panel",
+    logoutLabel: "Cambiar Dept.",
+    deptWelcome: {
+      marketing: "¡Hola! Bienvenido al Chat de FinOps de Marketing. Te ayudaré a redactar textos, generar lemas y planificar campañas optimizando costes de enrutamiento.",
+      engineering: "Sistema inicializado. Asistente técnico de código y base de datos activo. Enrutaré peticiones de código complejas a Mistral/Llama3.1 e instrucciones simples a modelos rápidos.",
+      sales: "Bienvenido al Panel de FinOps de Ventas. Consúltame sobre propuestas de clientes, análisis de leads y modelos de precios. El coste del enrutamiento se registrará abajo.",
+      support: "¡Hola! Asistente de soporte al cliente activo. Te ayudaré a redactar respuestas amables a clientes, plantillas de tickets y guías con la mayor eficiencia de coste."
+    },
+    deptMockResponse: {
+      marketing: "*(Agente de Marketing)* He redactado la propuesta. Evalué el coste y enruté a **{model}** para ahorrar presupuesto. Slogan sugerido: *'Desbloquea la eficiencia, abraza el progreso.'*",
+      engineering: "*(Agente de Desarrollo)* Petición enrutada a **{model}**. Optimizando... Código generado:\n```javascript\n// Consulta optimizada\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Agente de Ventas)* ¡Oferta estructurada! Petición enrutada a **{model}** para mantener el uso de presupuesto bajo. Resumen: *Descuento máximo del 15%, contrato de 12 meses.*",
+      support: "*(Agente de Soporte)* Borrador de respuesta preparado usando **{model}**: *'Gracias por contactar con nosotros. Hemos registrado su consulta con el ticket #9283 y nuestro equipo la está revisando.'*"
+    }
   },
   de: {
     team: "Team:",
@@ -32,7 +82,31 @@ export const translations = {
     mockResponse: "*(Simulierte Antwort)* Ich habe Ihre Anfrage mit **{model}** verarbeitet, da dies basierend auf unseren FinOps-Regeln die effizienteste Option für diese Art von Aufgabe ist.",
     routing: "Routing:",
     costLabel: "Kosten:",
-    inputPlaceholder: "Senden Sie eine Nachricht an den Proxy..."
+    inputPlaceholder: "Senden Sie eine Nachricht an den Proxy...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   },
   fr: {
     team: "Équipe:",
@@ -43,18 +117,66 @@ export const translations = {
     mockResponse: "*(Réponse simulée)* J'ai traité votre demande en utilisant **{model}** car c'est l'option la plus efficace pour ce type de tâche selon nos règles FinOps.",
     routing: "Routage:",
     costLabel: "Coût:",
-    inputPlaceholder: "Envoyez un message au proxy..."
+    inputPlaceholder: "Envoyez un message au proxy...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   },
   it: {
     team: "Squadra:",
     budgetUsage: "Utilizzo del Budget",
     activeModels: "Modelli Attivi",
     cost: "Costo:",
-    welcomeMessage: "Ciao! Sono il Proxy AI FinOps. Invia un messaggio per vedere come indirizzo le richieste a modelli diversi per ottimizzare i costi.",
-    mockResponse: "*(Risposta simulata)* Ho elaborato la tua richiesta utilizzando **{model}** perché è l'opzione più efficiente per questo tipo di attività in base alle nostre regole FinOps.",
+    welcomeMessage: "Ciao! Sono il Proxy AI FinOps. Invia un mensaje per vedere come indirizzo le richieste a modelli diversi per ottimizzare i costi.",
+    mockResponse: "*(Risposta simulata)* Ho elaborato la tua richiesta utilizando **{model}** perché è l'opzione più efficiente per questo tipo di attività in base alle nostre regole FinOps.",
     routing: "Routing:",
     costLabel: "Costo:",
-    inputPlaceholder: "Invia un messaggio al proxy..."
+    inputPlaceholder: "Invia un messaggio al proxy...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   },
   ja: {
     team: "チーム:",
@@ -65,7 +187,31 @@ export const translations = {
     mockResponse: "*(シミュレートされた応答)* FinOps のルールに基づき、この種のタスクに最も効率的なオプションであるため、**{model}** を使用してリクエストを処理しました。",
     routing: "ルーティング:",
     costLabel: "コスト:",
-    inputPlaceholder: "プロキシにメッセージを送信..."
+    inputPlaceholder: "プロキシにメッセージを送信...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   },
   ko: {
     team: "팀:",
@@ -76,6 +222,30 @@ export const translations = {
     mockResponse: "*(시뮬레이션된 응답)* FinOps 규칙에 따라 이 유형의 작업에 가장 효율적인 옵션이기 때문에 **{model}**을(를) 사용하여 요청을 처리했습니다.",
     routing: "라우팅:",
     costLabel: "비용:",
-    inputPlaceholder: "프록시에 메시지 보내기..."
+    inputPlaceholder: "프록시에 메시지 보내기...",
+    // New fields
+    registerTitle: "Sign In to FinOps Proxy",
+    registerSubtitle: "Configure your session profile",
+    nameLabel: "Your Name",
+    namePlaceholder: "Enter your name...",
+    deptLabel: "Department",
+    deptMarketing: "Marketing",
+    deptEngineering: "Engineering",
+    deptSales: "Sales",
+    deptSupport: "Customer Support",
+    enterBtn: "Enter Dashboard",
+    logoutLabel: "Change Dept.",
+    deptWelcome: {
+      marketing: "Hello! Welcome to the Marketing FinOps Chat. I can help you write copy, generate slogans, and plan social campaigns while optimizing routing costs.",
+      engineering: "System initialized. Code optimization and database querying assistant online. I'll route complex queries to Mistral/Llama3.1 and simple requests to faster models.",
+      sales: "Welcome to the Sales FinOps Dashboard. Ask me about client proposals, lead routing, and pricing models. Cost routing details will be tracked below.",
+      support: "Hello! Customer support assistant is active. I will help draft polite client replies, support tickets, and response templates with cost-efficiency in mind."
+    },
+    deptMockResponse: {
+      marketing: "*(Marketing Agent)* I've generated your copy concept. Evaluated cost and routed to **{model}** to save budget. Here is your pitch: *'Unlock efficiency, embrace progress.'*",
+      engineering: "*(Dev Agent)* Request routed to **{model}**. Optimizing... Code block generated:\n```javascript\n// Query optimized\nconst result = await db.query('SELECT * FROM users WHERE active = true');\nconsole.log(result);\n```",
+      sales: "*(Sales Agent)* Offer structured! Request routed to **{model}** to keep budget usage low. Proposal summary: *Discount rate capped at 15%, contract length 12 months.*",
+      support: "*(Support Agent)* Draft response prepared via **{model}**: *'Thank you for reaching out. We have logged your request under ticket #9283 and our team is reviewing it.'*"
+    }
   }
 };

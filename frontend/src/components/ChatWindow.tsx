@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Bot, User } from 'lucide-react'
 import { translations } from '../i18n'
 import type { Language } from '../i18n'
+import type { UserSession } from '../App'
 
 type Message = {
   id: string
@@ -12,7 +13,7 @@ type Message = {
   cost?: number
 }
 
-export function ChatWindow({ onMessageSent, lang }: { onMessageSent: (cost: number) => void, lang: Language }) {
+export function ChatWindow({ onMessageSent, lang, user }: { onMessageSent: (cost: number) => void, lang: Language, user: UserSession }) {
   const t = translations[lang]
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', role: 'assistant', content: '', model: 'system', cost: 0 } // Se traduce dinámicamente en el render
@@ -33,18 +34,43 @@ export function ChatWindow({ onMessageSent, lang }: { onMessageSent: (cost: numb
     setInput('')
     setIsTyping(true)
 
-    // Simulador de respuesta del Proxy
+    // Simulador de respuesta del Proxy personalizado según departamento
     setTimeout(() => {
       const isComplex = input.length > 50
-      const estimatedCost = isComplex ? 0.00024 : 0.00010; 
-      const modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama-3.1-8b (Groq)';
+      let modelUsed = ''
+      let estimatedCost = 0
+      let responseTemplate = ''
+
+      switch (user.department) {
+        case 'engineering':
+          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama-3.1-8b (Groq)'
+          estimatedCost = isComplex ? 0.00015 : 0.00005
+          responseTemplate = t.deptMockResponse.engineering
+          break
+        case 'marketing':
+          modelUsed = isComplex ? 'mistral:7b (Ollama)' : 'llama3.2:3b (Ollama)'
+          estimatedCost = isComplex ? 0.00015 : 0.00006
+          responseTemplate = t.deptMockResponse.marketing
+          break
+        case 'sales':
+          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
+          estimatedCost = isComplex ? 0.00005 : 0.00006
+          responseTemplate = t.deptMockResponse.sales
+          break
+        case 'support':
+        default:
+          modelUsed = isComplex ? 'llama-3.1-8b (Groq)' : 'llama3.2:3b (Ollama)'
+          estimatedCost = isComplex ? 0.00005 : 0.00006
+          responseTemplate = t.deptMockResponse.support
+          break
+      }
       
       onMessageSent(estimatedCost)
       
       const aiMsg: Message = { 
         id: (Date.now() + 1).toString(), 
         role: 'assistant', 
-        content: t.mockResponse.replace('{model}', modelUsed),
+        content: responseTemplate.replace('{model}', modelUsed),
         model: modelUsed,
         cost: estimatedCost
       }
@@ -55,7 +81,7 @@ export function ChatWindow({ onMessageSent, lang }: { onMessageSent: (cost: numb
 
   // Traducción en tiempo real para el primer mensaje (bienvenida)
   const displayMessages = messages.map(msg => 
-    msg.id === '1' ? { ...msg, content: t.welcomeMessage } : msg
+    msg.id === '1' ? { ...msg, content: t.deptWelcome[user.department] } : msg
   )
 
   return (
@@ -102,7 +128,7 @@ export function ChatWindow({ onMessageSent, lang }: { onMessageSent: (cost: numb
                 justifyContent: 'center',
                 flexShrink: 0,
                 color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
-                boxShadow: msg.role === 'user' ? '0 4px 12px rgba(157, 78, 221, 0.3)' : 'none'
+                boxShadow: msg.role === 'user' ? '0 4px 12px var(--accent-glow)' : 'none'
               }}>
                 {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
               </div>
@@ -122,7 +148,8 @@ export function ChatWindow({ onMessageSent, lang }: { onMessageSent: (cost: numb
                   lineHeight: '1.6',
                   fontSize: '1.05rem',
                   color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
-                  border: msg.role === 'assistant' ? '1px solid var(--panel-border)' : 'none'
+                  border: msg.role === 'assistant' ? '1px solid var(--panel-border)' : 'none',
+                  whiteSpace: 'pre-wrap'
                 }}>
                   {msg.content}
                 </div>
