@@ -2,6 +2,14 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const db = require('../db');
+require('dotenv').config();
+// 🧪 PRUEBA TEMPORAL DE ENVÍO DIRECTO AL ARRANCAR
+const { sendBudgetEmail } = require(__dirname + '/../emailService');
+
+
+
+
+const ALERT_EMAIL_DESTINATION = process.env.FINOPS_ALERT_EMAIL;
 
 // Activar esto (variable de entorno ENABLE_REAL_PROVIDERS=true) SOLO cuando
 // los contenedores de Ollama estén levantados (docker compose up) y con
@@ -113,10 +121,15 @@ async function callProvider(modelRow, messages) {
  * 4) Se devuelve en la respuesta HTTP para que el frontend la pinte al instante.
  */
 async function emitAlert({ consumerId, level, message }) {
-    console.warn(`[ALERT] 🔔 [${level.toUpperCase()}] (${consumerId}) ${message}`);
+    console.warn(`[ALERT] [${level.toUpperCase()}] (${consumerId}) ${message}`);
 
     try {
-        await db.insertNotification({ consumerId, level, message, channel: ALERT_WEBHOOK_URL ? 'ui+webhook' : 'ui' });
+        await db.insertNotification({ 
+            consumerId, 
+            level, 
+            message, 
+            channel: ALERT_WEBHOOK_URL ? 'ui+webhook+email' : 'ui+email' 
+        });
     } catch (error) {
         console.error('[ALERT ERROR] ❌ No se pudo persistir la notificación:', error.message);
     }
@@ -132,7 +145,10 @@ async function emitAlert({ consumerId, level, message }) {
         });
     }
 
+    sendBudgetEmail({ consumerId, level, message });
+
     return { level, message };
+
 }
 
 /* GET Health Check */
