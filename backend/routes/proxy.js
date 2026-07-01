@@ -22,6 +22,7 @@ const REAL_PROVIDERS_ENABLED = process.env.ENABLE_REAL_PROVIDERS === 'true';
 // solo quedan registradas en BD y visibles en la UI/consola (sigue cumpliendo
 // el requisito de "notificación visible por cualquier canal").
 const ALERT_WEBHOOK_URL = process.env.FINOPS_ALERT_WEBHOOK_URL;
+const PROVIDER_TIMEOUT_MS = Number(process.env.FINOPS_PROVIDER_TIMEOUT_MS) || 300000;
 
 const DEFAULT_MODEL = 'llama3.2:3b';
 
@@ -85,23 +86,25 @@ function classifyPrompt(promptString, estimatedPromptTokens) {
  */
 async function callProvider(modelRow, messages) {
     if (!REAL_PROVIDERS_ENABLED) {
-        return null;
+        return { data: null, error: 'simulation_mode' };
     }
 
     try {
-        // Solo proveedores locales de Ollama (OpenAI-compatible). Sin claves externas.
         const headers = { 'Content-Type': 'application/json' };
 
         const response = await axios.post(
             `${modelRow.base_url}/chat/completions`,
             { model: modelRow.model_id, messages },
-            { headers, timeout: 15000 }
+            { headers, timeout: PROVIDER_TIMEOUT_MS }
         );
 
-        return response.data;
+        return { data: response.data, error: null };
     } catch (error) {
-        console.error(`[PROVIDER ERROR] ❌ ${modelRow.model_id}:`, error.message);
-        return null;
+        const reason = error.code === 'ECONNABORTED'
+            ? `timeout (${PROVIDER_TIMEOUT_MS / 1000}s)`
+            : (error.response?.data?.error?.message || error.message);
+        console.error(`[PROVIDER ERROR] ❌ ${modelRow.model_id} @ ${modelRow.base_url}:`, reason);
+        return { data: null, error: reason };
     }
 }
 
@@ -386,7 +389,9 @@ router.post('/v1/chat/completions', async (req, res) => {
         console.log(`[FINOPS] 🔀 Decisión de routing: ${targetModel} | Método: ${routingMethod} | Motivo: ${routingReason}`);
 
         // 4. LLAMADA AL PROVEEDOR (real si ENABLE_REAL_PROVIDERS=true, si no, simulada)
-        const providerResponse = await callProvider(targetModelRow, messages);
+        const providerResult = await callProvider(targetModelRow, messages);
+        const providerResponse = providerResult.data;
+        const providerError = providerResult.error;
 
         let usage;
         let assistantContent;
@@ -395,13 +400,16 @@ router.post('/v1/chat/completions', async (req, res) => {
             usage = providerResponse.usage;
             assistantContent = providerResponse.choices?.[0]?.message?.content || '(respuesta vacía del proveedor)';
         } else {
-            // Simulamos un contexto real sumando un buffer base (system prompt + historial + contexto) de 10k a 20k tokens.
-            // Esto hace que el consumo de tokens y el coste sean realistas para peticiones corporativas y aumenten de forma visible.
             const baseTokens = Math.floor(Math.random() * 10000) + 10000;
             const promptTokens = tokensEstimadosInput + baseTokens;
             const simulatedCompletionTokens = Math.max(150, Math.ceil(promptTokens * 0.15));
             usage = { prompt_tokens: promptTokens, completion_tokens: simulatedCompletionTokens };
-            assistantContent = `Respuesta simulada generada desde ${targetModel}. (Modo simulación: activa ENABLE_REAL_PROVIDERS=true tras 'docker compose up' para respuestas reales)`;
+
+            if (providerError === 'simulation_mode') {
+                assistantContent = `Respuesta simulada generada desde ${targetModel}. (Modo simulación: activa ENABLE_REAL_PROVIDERS=true tras 'docker compose up' para respuestas reales)`;
+            } else {
+                assistantContent = `⚠️ No se pudo conectar con ${targetModel} en ${targetModelRow.base_url}. Motivo: ${providerError}. Comprueba que el contenedor Ollama esté activo y que el modelo esté descargado (ollama pull ${targetModel}).`;
+            }
         }
 
         // 5. CÁLCULO DE COSTES EXACTOS (precios reales desde la tabla `models`)

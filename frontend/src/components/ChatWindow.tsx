@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Bot, User } from 'lucide-react'
-import { translations } from '../i18n'
-import type { Language } from '../i18n'
+import { translations, type Language } from '../i18n'
 import type { UserSession } from '../App'
 import { getConsumerId } from '../consumers'
 import { formatUsd } from '../utils/format'
@@ -51,12 +50,30 @@ export function ChatWindow({
   ])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [waitSeconds, setWaitSeconds] = useState(0)
   const [alert, setAlert] = useState<AlertBanner | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isTyping])
+  }, [messages, isTyping, waitSeconds])
+
+  useEffect(() => {
+    if (isTyping) {
+      setWaitSeconds(0)
+      waitTimerRef.current = setInterval(() => {
+        setWaitSeconds((s) => s + 1)
+      }, 1000)
+    } else if (waitTimerRef.current) {
+      clearInterval(waitTimerRef.current)
+      waitTimerRef.current = null
+      setWaitSeconds(0)
+    }
+    return () => {
+      if (waitTimerRef.current) clearInterval(waitTimerRef.current)
+    }
+  }, [isTyping])
 
   const handleSend = async () => {
     if (!input.trim()) return
@@ -70,8 +87,9 @@ export function ChatWindow({
     const consumerId = getConsumerId(user.department)
 
     try {
-      // Llamada real al AI FinOps Proxy. El backend decide el modelo,
-      // calcula el coste y aplica presupuesto. El frontend solo pinta la respuesta.
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 300000)
+
       const response = await fetch(`${API_BASE_URL}/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -81,8 +99,11 @@ export function ChatWindow({
         },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }]
-        })
+        }),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
 
       const data = await response.json()
 
@@ -118,7 +139,9 @@ export function ChatWindow({
         routingReason: data?.finops?.routing_reason
       }])
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Error desconocido del proxy'
+      const msg = error instanceof Error && error.name === 'AbortError'
+        ? 'La petición tardó demasiado (>5 min). Mistral en local puede ser lento; inténtalo de nuevo o usa una pregunta más corta.'
+        : (error instanceof Error ? error.message : 'Error desconocido del proxy')
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -246,15 +269,28 @@ export function ChatWindow({
           {isTyping && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
-              style={{ display: 'flex', gap: '16px', alignItems: 'center', position: 'relative', zIndex: 1 }}
+              style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
             >
-              <div style={{ width: '40px', height: '40px', borderRadius: '0px', background: 'var(--icon-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '0px', background: 'var(--icon-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Bot size={20} />
               </div>
-              <div style={{ display: 'flex', gap: '6px', background: 'var(--ai-msg-bg)', padding: '20px', borderRadius: '0px' }}>
-                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
-                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
-                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '6px', background: 'var(--ai-msg-bg)', padding: '20px', borderRadius: '0px', border: '1px solid var(--panel-border)' }}>
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
+                  <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} style={{ width: '8px', height: '8px', background: 'var(--text-secondary)', borderRadius: '50%' }} />
+                </div>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', lineHeight: 1.5 }}>
+                  {'loadingHint' in t ? (t as typeof translations.es).loadingHint : 'Consultando modelo local...'}
+                </p>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
+                  {'loadingElapsed' in t
+                    ? (t as typeof translations.es).loadingElapsed.replace('{seconds}', String(waitSeconds))
+                    : `Esperando: ${waitSeconds}s`}
+                </p>
               </div>
             </motion.div>
           )}
@@ -271,8 +307,9 @@ export function ChatWindow({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && !isTyping && handleSend()}
             placeholder={t.inputPlaceholder}
+            disabled={isTyping}
             style={{
               flex: 1, background: 'transparent', border: 'none',
               color: 'var(--text-primary)', fontSize: '1.05rem', outline: 'none', fontFamily: 'inherit'
@@ -281,11 +318,12 @@ export function ChatWindow({
           <motion.button
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
             onClick={handleSend}
+            disabled={isTyping || !input.trim()}
             style={{
               background: 'var(--user-msg-bg)', border: 'none', width: '44px', height: '44px',
               borderRadius: '0px', display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--text-inverse)', cursor: 'pointer',
-              opacity: input.trim() ? 1 : 0.5, transition: 'opacity 0.2s ease'
+              opacity: input.trim() && !isTyping ? 1 : 0.5, transition: 'opacity 0.2s ease'
             }}
           >
             <Send size={20} style={{ marginLeft: '-2px' }} />

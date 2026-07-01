@@ -35,9 +35,5 @@ app.use(function (err, req, res, next) {
         }
     });
 });
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 ¡Backend corriendo con éxito en http://localhost:${PORT}!`);
-});
 
 module.exports = app;
