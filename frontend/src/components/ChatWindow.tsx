@@ -5,6 +5,7 @@ import { translations } from '../i18n'
 import type { Language } from '../i18n'
 import type { UserSession } from '../App'
 import { getConsumerId } from '../consumers'
+import { formatUsd } from '../utils/format'
 
 type Message = {
   id: string
@@ -31,11 +32,6 @@ const ALERT_STYLES: Record<AlertLevel, { bg: string; border: string; icon: strin
   warning: { bg: 'rgba(255, 193, 7, 0.15)', border: '#FFC107', icon: '⚠️' },
   critical: { bg: 'rgba(255, 107, 0, 0.15)', border: '#FF6B00', icon: '🟠' },
   blocked: { bg: 'rgba(208, 2, 27, 0.15)', border: '#D0021B', icon: '🛑' }
-}
-
-function formatUsd(value: number): string {
-  if (value >= 0.01) return value.toFixed(4)
-  return value.toFixed(8)
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -80,7 +76,8 @@ export function ChatWindow({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-consumer-id': consumerId
+          'x-consumer-id': consumerId,
+          'x-user-name': user.name
         },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }]

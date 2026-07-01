@@ -268,6 +268,10 @@ router.post('/v1/chat/completions', async (req, res) => {
         if (!consumerId) {
             return res.status(400).json({ error: 'Falta la cabecera x-consumer-id' });
         }
+        // Identidad individual opcional (para el desglose "por persona" del
+        // dashboard). No es obligatoria: sin ella, el proxy sigue funcionando
+        // a nivel de equipo igual que antes.
+        const userName = typeof req.headers['x-user-name'] === 'string' ? req.headers['x-user-name'].slice(0, 80) : null;
 
         const { model: requestedModel, messages } = req.body;
         if (!Array.isArray(messages) || messages.length === 0) {
@@ -383,6 +387,7 @@ router.post('/v1/chat/completions', async (req, res) => {
         // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2), en transacción
         await db.recordUsageAndUpdateSpend({
             consumerId,
+            userName,
             requestedModel,
             targetModel,
             promptTokens: usage.prompt_tokens,

@@ -77,6 +77,7 @@ async function initializeDatabase() {
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             consumer_id TEXT NOT NULL,
+            user_name TEXT,
             requested_model TEXT,
             target_model TEXT NOT NULL,
             prompt_tokens INTEGER NOT NULL CHECK (prompt_tokens >= 0),
@@ -101,11 +102,16 @@ async function initializeDatabase() {
         );
     `);
 
-    // Migración idempotente: si la BD ya existía de una versión anterior sin
-    // la columna estimated_savings_usd, la añadimos sin perder datos.
+    // Migraciones idempotentes: si la BD ya existía de una versión anterior,
+    // añadimos las columnas nuevas sin perder datos históricos.
     const hasSavingsColumn = await columnExists(db, 'audit_logs', 'estimated_savings_usd');
     if (!hasSavingsColumn) {
         await db.exec(`ALTER TABLE audit_logs ADD COLUMN estimated_savings_usd REAL NOT NULL DEFAULT 0`);
+    }
+
+    const hasUserNameColumn = await columnExists(db, 'audit_logs', 'user_name');
+    if (!hasUserNameColumn) {
+        await db.exec(`ALTER TABLE audit_logs ADD COLUMN user_name TEXT`);
     }
 
     for (const model of DEFAULT_MODELS) {
@@ -147,6 +153,7 @@ async function listActiveModels() {
 
 async function recordUsageAndUpdateSpend({
     consumerId,
+    userName,
     requestedModel,
     targetModel,
     promptTokens,
@@ -162,11 +169,11 @@ async function recordUsageAndUpdateSpend({
     try {
         await db.run(
             `INSERT INTO audit_logs (
-                consumer_id, requested_model, target_model,
+                consumer_id, user_name, requested_model, target_model,
                 prompt_tokens, completion_tokens, total_cost_usd, estimated_savings_usd,
                 routing_method, routing_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            consumerId, requestedModel || null, targetModel,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            consumerId, userName || null, requestedModel || null, targetModel,
             promptTokens, completionTokens, totalCostUsd, estimatedSavingsUsd || 0,
             routingMethod, routingReason
         );
@@ -305,6 +312,24 @@ async function getFlowDashboardData() {
         ORDER BY c.current_spend_usd DESC
     `);
 
+    // Contribución individual de cada persona dentro de su equipo (para el
+    // desglose "quién ha gastado qué" que pide el dashboard).
+    const userUsage = await db.all(`
+        SELECT
+            a.consumer_id,
+            c.name AS consumer_name,
+            COALESCE(NULLIF(TRIM(a.user_name), ''), 'Sin identificar') AS user_name,
+            COUNT(a.id) AS requests_count,
+            COALESCE(SUM(a.prompt_tokens), 0) AS prompt_tokens,
+            COALESCE(SUM(a.completion_tokens), 0) AS completion_tokens,
+            COALESCE(SUM(a.total_cost_usd), 0) AS total_cost_usd,
+            COALESCE(SUM(a.estimated_savings_usd), 0) AS total_savings_usd
+        FROM audit_logs a
+        LEFT JOIN consumers c ON c.id = a.consumer_id
+        GROUP BY a.consumer_id, user_name
+        ORDER BY c.name ASC, total_cost_usd DESC
+    `);
+
     const modelUsage = await db.all(`
         SELECT
             a.target_model AS model_id,
@@ -383,6 +408,7 @@ async function getFlowDashboardData() {
             a.consumer_id,
             c.name AS consumer_name,
             c.department,
+            a.user_name,
             a.requested_model,
             a.target_model,
             a.routing_method,
@@ -413,6 +439,7 @@ async function getFlowDashboardData() {
             projected_monthly_spend_usd: projectedMonthlySpendUsd
         },
         consumers,
+        user_usage: userUsage,
         model_usage: modelUsage,
         routing_usage: routingUsage,
         daily_spend: dailySpend,
