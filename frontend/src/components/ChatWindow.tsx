@@ -54,9 +54,11 @@ export function ChatWindow({
     const prompt = input.trim()
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: prompt }
     setMessages(prev => [...prev, userMsg])
+    const currentInput = input
     setInput('')
     setIsTyping(true)
 
+<<<<<<< HEAD
     const consumerId = getConsumerId(user.department)
 
     try {
@@ -103,6 +105,54 @@ export function ChatWindow({
         role: 'assistant',
         content: `⚠️ ${msg}`
       }])
+=======
+    try {
+      // Mapeo del departamento al consumerId que espera la BDD
+      const consumerMap: Record<string, string> = {
+        'engineering': 'equipo-ingenieria',
+        'sales': 'equipo-ventas',
+        'support': 'equipo-soporte',
+        'marketing': 'equipo-marketing'
+      }
+      const consumerId = consumerMap[user.department] || 'equipo-marketing'
+      
+      const response = await fetch('http://localhost:3000/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-consumer-id': consumerId
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: currentInput }]
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error?.detail || data.error?.message || data.error || 'Error del servidor')
+      }
+
+      // Descontamos el coste del presupuesto en la UI
+      onMessageSent(data.finops.cost_usd)
+      
+      const aiMsg: Message = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: data.choices[0].message.content,
+        model: data.model,
+        cost: data.finops.cost_usd
+      }
+      setMessages(prev => [...prev, aiMsg])
+
+    } catch (error: any) {
+      const errorMsg: Message = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: `❌ Error de FinOps: ${error.message}`
+      }
+      setMessages(prev => [...prev, errorMsg])
+>>>>>>> 90c732dac9614fc5d5a13a3ecfc7889b4ca319b1
     } finally {
       setIsTyping(false)
     }
