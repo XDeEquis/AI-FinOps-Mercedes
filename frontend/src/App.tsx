@@ -16,6 +16,7 @@ export interface UserSession {
 type FontSize = 'small' | 'medium' | 'large'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:8501'
 
 export default function App() {
   const [budget, setBudget] = useState(5.00)
@@ -132,7 +133,7 @@ export default function App() {
               {translations[lang].logoutLabel}
             </button>
             <a 
-              href="http://localhost:8501" 
+              href={DASHBOARD_URL}
               target="_blank" 
               rel="noopener noreferrer"
               className="header-btn"
@@ -280,20 +281,10 @@ export default function App() {
   }
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      height: '100%', 
-      padding: '32px', 
-      gap: '32px', 
-      maxWidth: '1400px', 
-      margin: '0 auto', 
-      position: 'relative',
-      alignItems: user ? 'stretch' : 'center',
-      justifyContent: user ? 'stretch' : 'center'
-    }}>
+    <div className={`app-shell ${user ? 'app-shell-auth' : 'app-shell-login'}`}>
       
       {!user && (
-        <div style={{ position: 'absolute', top: '32px', right: '32px', zIndex: 50 }}>
+        <div className="floating-controls">
           {renderControls(false)}
         </div>
       )}

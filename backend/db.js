@@ -10,6 +10,7 @@ const DB_PATH = process.env.FINOPS_DB_PATH || path.join(__dirname, 'finops.db');
 // variable de entorno para la demo, y ajustable en caliente por equipo con
 // PATCH /v1/consumers/:id/budget (ver routes/proxy.js).
 const DEFAULT_BUDGET_USD = Number(process.env.FINOPS_DEFAULT_BUDGET_USD) || 5.0;
+const BUDGET_EPSILON = 1e-8;
 
 let dbPromise;
 
@@ -177,6 +178,27 @@ async function recordUsageAndUpdateSpend({
 
     await db.exec('BEGIN TRANSACTION');
     try {
+        const consumer = await db.get(
+            `SELECT id, monthly_budget_usd, current_spend_usd
+             FROM consumers
+             WHERE id = ?`,
+            consumerId
+        );
+        if (!consumer) {
+            const error = new Error(`Consumidor no encontrado: ${consumerId}`);
+            error.code = 'CONSUMER_NOT_FOUND';
+            throw error;
+        }
+
+        const projectedSpend = Number(consumer.current_spend_usd) + Number(totalCostUsd);
+        if (projectedSpend - Number(consumer.monthly_budget_usd) > BUDGET_EPSILON) {
+            const error = new Error(
+                `Presupuesto excedido. Gasto proyectado $${projectedSpend.toFixed(8)} > presupuesto mensual $${Number(consumer.monthly_budget_usd).toFixed(8)}.`
+            );
+            error.code = 'BUDGET_VALIDATION';
+            throw error;
+        }
+
         await db.run(
             `INSERT INTO audit_logs (
                 consumer_id, user_name, requested_model, target_model,
@@ -225,6 +247,20 @@ async function getConsumerSummary(consumerId) {
 
 async function setConsumerSpend(consumerId, currentSpendUsd) {
     const db = await getDb();
+    const consumer = await getConsumerById(consumerId);
+    if (!consumer) {
+        const error = new Error(`Consumidor no encontrado: ${consumerId}`);
+        error.code = 'CONSUMER_NOT_FOUND';
+        throw error;
+    }
+    if (Number(currentSpendUsd) - Number(consumer.monthly_budget_usd) > BUDGET_EPSILON) {
+        const error = new Error(
+            `current_spend_usd no puede superar monthly_budget_usd (${Number(consumer.monthly_budget_usd).toFixed(8)}).`
+        );
+        error.code = 'BUDGET_VALIDATION';
+        throw error;
+    }
+
     await db.run(
         `UPDATE consumers SET current_spend_usd = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         currentSpendUsd, consumerId
@@ -234,6 +270,20 @@ async function setConsumerSpend(consumerId, currentSpendUsd) {
 
 async function setConsumerBudget(consumerId, monthlyBudgetUsd) {
     const db = await getDb();
+    const consumer = await getConsumerById(consumerId);
+    if (!consumer) {
+        const error = new Error(`Consumidor no encontrado: ${consumerId}`);
+        error.code = 'CONSUMER_NOT_FOUND';
+        throw error;
+    }
+    if (Number(consumer.current_spend_usd) - Number(monthlyBudgetUsd) > BUDGET_EPSILON) {
+        const error = new Error(
+            `monthly_budget_usd no puede quedar por debajo del gasto actual (${Number(consumer.current_spend_usd).toFixed(8)}).`
+        );
+        error.code = 'BUDGET_VALIDATION';
+        throw error;
+    }
+
     await db.run(
         `UPDATE consumers SET monthly_budget_usd = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         monthlyBudgetUsd, consumerId
@@ -492,8 +542,8 @@ function pickWeighted(items, rand) {
 /**
  * Rellena la base de datos con un histórico realista de 14 días para la demo:
  * varios equipos, varias personas por equipo, decisiones de routing coherentes,
- * y presupuestos ajustados para dejar un equipo BLOQUEADO (>100%), otro CRÍTICO
- * (~93%), uno en aviso y otro holgado. Es idempotente: borra y regenera.
+ * y presupuestos ajustados para dejar equipos en niveles de consumo distintos
+ * sin superar nunca el 100%. Es idempotente: borra y regenera.
  */
 async function seedDemoData() {
     await initializeDatabase();
@@ -506,10 +556,11 @@ async function seedDemoData() {
 
     // targetRatio = gasto / presupuesto deseado al final del seed.
     // Volúmenes altos (cargas corporativas con contexto largo) para que el gasto
-    // y los presupuestos se lean en dólares y no en céntimos.
+    // y los presupuestos se lean en dólares y no en céntimos, pero sin exceder
+    // nunca el 100% para respetar las validaciones de presupuesto.
     const teams = [
         { id: 'equipo-ingenieria', users: ['Alejandro', 'Laura', 'Marc', 'Nuria'], perDay: [30, 50], targetRatio: 0.62 },
-        { id: 'equipo-marketing', users: ['Sofía', 'Diego', 'Elena'], perDay: [25, 45], targetRatio: 1.08 },
+        { id: 'equipo-marketing', users: ['Sofía', 'Diego', 'Elena'], perDay: [25, 45], targetRatio: 0.98 },
         { id: 'equipo-ventas', users: ['Carlos', 'Marta', 'Iván'], perDay: [28, 48], targetRatio: 0.93 },
         { id: 'equipo-soporte', users: ['Paula', 'Hugo'], perDay: [12, 25], targetRatio: 0.45 }
     ];

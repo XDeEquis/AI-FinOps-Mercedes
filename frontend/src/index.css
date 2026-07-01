@@ -1,15 +1,15 @@
 /* Dark mode (default) */
 :root {
   --bg-color: #0b0c10;
-  --panel-bg: rgba(20, 22, 28, 0.45);
+  --panel-bg: rgba(18, 23, 35, 0.62);
   --panel-border: rgba(255, 255, 255, 0.08);
   --text-primary: #f0f0f2;
   --text-secondary: #8c8f9c;
   --text-inverse: #ffffff;
-  --accent-primary: #cbd5e1;
-  --accent-secondary: #94a3b8;
+  --accent-primary: #3b6ea5;
+  --accent-secondary: #7a8699;
   --user-msg-bg: var(--accent-primary);
-  --ai-msg-bg: rgba(255, 255, 255, 0.04);
+  --ai-msg-bg: rgba(255, 255, 255, 0.06);
   --font-main: 'MB Corpo S Text', 'CorpoS', 'Inter', system-ui, sans-serif;
   --font-title: 'MB Corpo A Title', 'CorpoA', 'Georgia', serif;
   --gradient-1: rgba(255, 255, 255, 0.05);
@@ -22,12 +22,12 @@
 /* Light mode */
 :root.light {
   --bg-color: #f4f5f7;
-  --panel-bg: rgba(255, 255, 255, 0.65);
+  --panel-bg: rgba(255, 255, 255, 0.82);
   --panel-border: rgba(0, 0, 0, 0.08);
   --text-primary: #1a1c23;
   --text-secondary: #5a5d6e;
   --text-inverse: #ffffff;
-  --accent-primary: #64748b;
+  --accent-primary: #3b6ea5;
   --accent-secondary: #475569;
   --user-msg-bg: var(--accent-primary);
   --ai-msg-bg: rgba(0, 0, 0, 0.04);
@@ -62,7 +62,7 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
-  border-radius: 0px;
+  border-radius: 14px;
   box-shadow: var(--glass-shadow);
   transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
@@ -258,7 +258,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   color: var(--text-primary) !important;
-  border-radius: 0px;
+  border-radius: 12px;
   padding: 0 16px;
   height: 48px;
   display: flex;
@@ -301,6 +301,102 @@ h1, h2, h3, h4, h5, h6 {
 
 :root.light .chat-watermark {
   opacity: 0.09; /* Stand out more when background is white/light */
+}
+
+.app-shell {
+  display: flex;
+  height: 100%;
+  padding: 32px;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.app-shell-auth {
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.app-shell-login {
+  align-items: center;
+  justify-content: center;
+}
+
+.floating-controls {
+  position: absolute;
+  top: 32px;
+  right: 32px;
+  z-index: 50;
+}
+
+.chat-window .chat-input-wrapper,
+.chat-window .chat-bubble {
+  border-radius: 12px !important;
+}
+
+.chat-window .chat-messages {
+  scrollbar-gutter: stable both-edges;
+}
+
+@media (max-width: 1180px) {
+  .app-shell {
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+    padding: 16px;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  .floating-controls {
+    top: 16px;
+    right: 16px;
+  }
+
+  .finops-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    padding: 20px !important;
+    gap: 24px !important;
+  }
+
+  .chat-window {
+    min-height: 58vh;
+  }
+
+  .chat-window .chat-messages {
+    padding: 20px !important;
+    gap: 16px !important;
+  }
+
+  .chat-window .chat-input-area {
+    padding: 16px 20px !important;
+  }
+
+  .chat-window .chat-message-content-wrapper {
+    max-width: 88% !important;
+  }
+}
+
+@media (max-width: 680px) {
+  body {
+    overflow: auto;
+  }
+
+  .register-card {
+    padding: 24px;
+    max-width: 100%;
+  }
+
+  .chat-window {
+    min-height: 64vh;
+  }
+
+  .chat-watermark {
+    width: 180px;
+    height: 180px;
+  }
 }
 
 

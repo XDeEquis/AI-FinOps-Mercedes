@@ -65,6 +65,85 @@ ALERT_LABELS = {"warning": "Aviso (80%)", "critical": "Crítico (90%)", "blocked
 
 st.set_page_config(page_title="AI FinOps Dashboard", page_icon=None, layout="wide")
 
+UI_TEXT = {
+    "es": {
+        "sidebar_title": "AI FinOps",
+        "sidebar_caption": "Mercedes-Benz Hackathon",
+        "refresh": "Actualizar datos",
+        "language": "Idioma",
+        "theme": "Tema",
+        "theme_dark": "Oscuro",
+        "theme_light": "Claro",
+        "currency": "Moneda",
+        "horizon": "Horizonte de proyección (días)",
+        "backend": "Backend",
+        "title": "AI FinOps Dashboard",
+        "updated_at": "Última actualización",
+        "tabs": ["Resumen", "Equipos", "Modelos y routing", "Proyección", "Auditoría", "Alertas"],
+        "kpi_total_requests": "Solicitudes totales",
+        "kpi_total_cost": "Coste acumulado",
+        "kpi_budget_used": "Presupuesto usado",
+        "kpi_routing_savings": "Ahorro por routing",
+        "kpi_remaining_budget": "Presupuesto restante",
+        "kpi_total_budget": "Presupuesto total",
+        "kpi_avg_cost": "Coste medio / solicitud",
+        "kpi_month_projection": "Proyección mensual",
+    },
+    "en": {
+        "sidebar_title": "AI FinOps",
+        "sidebar_caption": "Mercedes-Benz Hackathon",
+        "refresh": "Refresh data",
+        "language": "Language",
+        "theme": "Theme",
+        "theme_dark": "Dark",
+        "theme_light": "Light",
+        "currency": "Currency",
+        "horizon": "Forecast horizon (days)",
+        "backend": "Backend",
+        "title": "AI FinOps Dashboard",
+        "updated_at": "Last updated",
+        "tabs": ["Overview", "Teams", "Models & routing", "Forecast", "Audit", "Alerts"],
+        "kpi_total_requests": "Total requests",
+        "kpi_total_cost": "Total spend",
+        "kpi_budget_used": "Budget used",
+        "kpi_routing_savings": "Routing savings",
+        "kpi_remaining_budget": "Remaining budget",
+        "kpi_total_budget": "Total budget",
+        "kpi_avg_cost": "Avg cost / request",
+        "kpi_month_projection": "Monthly projection",
+    },
+}
+
+if "ui_lang" not in st.session_state:
+    st.session_state.ui_lang = "es"
+if "ui_theme" not in st.session_state:
+    st.session_state.ui_theme = "dark"
+if "ui_currency" not in st.session_state:
+    st.session_state.ui_currency = "USD"
+if "ui_currency_rate" not in st.session_state:
+    st.session_state.ui_currency_rate = 1.0
+
+
+def tr(key: str):
+    lang = st.session_state.get("ui_lang", "es")
+    return UI_TEXT.get(lang, UI_TEXT["es"]).get(key, key)
+
+
+@st.cache_data(ttl=1800)
+def get_currency_rates():
+    try:
+        response = requests.get(
+            "https://api.frankfurter.app/latest?from=USD&to=USD,EUR,GBP,JPY",
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        rates = payload.get("rates", {})
+        rates["USD"] = 1.0
+        return rates
+    except Exception:
+        return {"USD": 1.0, "EUR": 0.92, "GBP": 0.79, "JPY": 157.0}
+
 st.markdown("""
 <style>
     #MainMenu, footer {visibility: hidden;}
@@ -92,9 +171,13 @@ def load_data() -> dict:
 
 def money(v) -> str:
     v = float(v or 0)
+    currency = st.session_state.get("ui_currency", "USD")
+    symbol = {"USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥"}.get(currency, "$")
     if v == 0:
-        return "$0.00"
-    return f"${v:,.4f}" if v >= 0.01 else f"${v:,.8f}"
+        return f"{symbol}0.00"
+    if currency == "JPY":
+        return f"{symbol}{v:,.0f}"
+    return f"{symbol}{v:,.4f}" if v >= 0.01 else f"{symbol}{v:,.8f}"
 
 
 def pct(v) -> str:
@@ -102,12 +185,31 @@ def pct(v) -> str:
     return f"{v:.4f}%" if 0 < v < 0.1 else f"{v:.1f}%"
 
 
+def convert_currency_value(v):
+    return float(v or 0) * float(st.session_state.get("ui_currency_rate", 1.0))
+
+
+def convert_currency_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    usd_columns = [col for col in df.columns if "usd" in col.lower()]
+    if not usd_columns:
+        return df
+    converted = df.copy()
+    for col in usd_columns:
+        converted[col] = pd.to_numeric(converted[col], errors="coerce").fillna(0) * float(
+            st.session_state.get("ui_currency_rate", 1.0)
+        )
+    return converted
+
+
 def chart_layout(fig, height=360):
+    plot_text = "#1a1c23" if st.session_state.get("ui_theme", "dark") == "light" else "#f0f0f2"
     fig.update_layout(
         margin=dict(t=30, b=30, l=10, r=10),
         height=height,
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        font=dict(size=13),
+        font=dict(size=13, color=plot_text),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
@@ -176,15 +278,55 @@ def predict_sequence(seq_df: pd.DataFrame, steps_ahead: int = 20):
 
 # ──────────────────────── SIDEBAR ────────────────────────
 with st.sidebar:
-    st.markdown("### AI FinOps")
-    st.caption("Mercedes-Benz Hackathon")
+    st.markdown(f"### {tr('sidebar_title')}")
+    st.caption(tr("sidebar_caption"))
     st.divider()
-    if st.button("Actualizar datos", use_container_width=True):
+    if st.button(tr("refresh"), use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     st.divider()
-    horizon = st.slider("Horizonte de proyección (días)", min_value=7, max_value=60, value=14, step=7)
-    st.caption(f"Backend: {BACKEND_URL}")
+    st.session_state.ui_lang = st.selectbox(
+        tr("language"),
+        options=["es", "en"],
+        format_func=lambda v: "ES - Espanol" if v == "es" else "EN - English",
+    )
+    st.session_state.ui_theme = st.radio(
+        tr("theme"),
+        options=["dark", "light"],
+        horizontal=True,
+        format_func=lambda v: tr("theme_dark") if v == "dark" else tr("theme_light"),
+    )
+    rates = get_currency_rates()
+    st.session_state.ui_currency = st.selectbox(tr("currency"), options=["USD", "EUR", "GBP", "JPY"])
+    st.session_state.ui_currency_rate = float(rates.get(st.session_state.ui_currency, 1.0))
+
+    horizon = st.slider(tr("horizon"), min_value=7, max_value=60, value=14, step=7)
+    st.caption(f"{tr('backend')}: {BACKEND_URL}")
+
+is_light_theme = st.session_state.get("ui_theme", "dark") == "light"
+theme_bg = "#f4f5f7" if is_light_theme else "#0b0c10"
+theme_text = "#1a1c23" if is_light_theme else "#f0f0f2"
+theme_panel = "rgba(255,255,255,0.82)" if is_light_theme else "rgba(18,23,35,0.62)"
+theme_border = "rgba(0,0,0,0.10)" if is_light_theme else "rgba(255,255,255,0.09)"
+
+st.markdown(
+    f"""
+<style>
+    .stApp {{
+        background-color: {theme_bg};
+        color: {theme_text};
+    }}
+    h1, h2, h3, h4, p, span, label, div {{
+        color: {theme_text};
+    }}
+    [data-testid="stMetric"] {{
+        background: {theme_panel};
+        border: 1px solid {theme_border};
+    }}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 # ──────────────────────── CARGA ────────────────────────
 try:
@@ -216,6 +358,30 @@ sequence_df = pd.DataFrame(sequence_raw) if sequence_raw else pd.DataFrame()
 recent_df = pd.DataFrame(recent_raw) if recent_raw else pd.DataFrame()
 notifications_df = pd.DataFrame(notifications_raw) if notifications_raw else pd.DataFrame()
 
+for money_key in [
+    "current_spend_usd",
+    "remaining_budget_usd",
+    "total_monthly_budget_usd",
+    "total_cost_usd",
+    "total_savings_usd",
+    "avg_cost_per_request",
+    "projected_monthly_spend_usd",
+]:
+    if money_key in overview:
+        overview[money_key] = convert_currency_value(overview[money_key])
+
+consumers_df = convert_currency_columns(consumers_df)
+user_usage_df = convert_currency_columns(user_usage_df)
+models_df = convert_currency_columns(models_df)
+routing_df = convert_currency_columns(routing_df)
+daily_df = convert_currency_columns(daily_df)
+hourly_df = convert_currency_columns(hourly_df)
+sequence_df = convert_currency_columns(sequence_df)
+recent_df = convert_currency_columns(recent_df)
+
+currency_code = st.session_state.get("ui_currency", "USD")
+currency_symbol = {"USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥"}.get(currency_code, "$")
+
 if not daily_df.empty:
     daily_df["day"] = pd.to_datetime(daily_df["day"])
 if not hourly_df.empty:
@@ -228,8 +394,8 @@ if not recent_df.empty:
     recent_df["created_at"] = pd.to_datetime(recent_df["created_at"])
 
 # ──────────────────────── HEADER ────────────────────────
-st.title("AI FinOps Dashboard")
-st.caption(f"Última actualización: {data.get('generated_at', '—')}")
+st.title(tr("title"))
+st.caption(f"{tr('updated_at')}: {data.get('generated_at', '—')}")
 
 if not notifications_df.empty:
     for _, n in notifications_df.head(3).iterrows():
@@ -241,22 +407,20 @@ st.divider()
 
 # ──────────────────────── KPIs GLOBALES ────────────────────────
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Solicitudes totales", int(overview.get("total_requests", 0)))
-k2.metric("Coste acumulado", money(overview.get("current_spend_usd", 0)))
-k3.metric("Presupuesto usado", pct(overview.get("budget_usage_ratio", 0)))
-k4.metric("Ahorro por routing", money(overview.get("total_savings_usd", 0)))
+k1.metric(tr("kpi_total_requests"), int(overview.get("total_requests", 0)))
+k2.metric(tr("kpi_total_cost"), money(overview.get("current_spend_usd", 0)))
+k3.metric(tr("kpi_budget_used"), pct(overview.get("budget_usage_ratio", 0)))
+k4.metric(tr("kpi_routing_savings"), money(overview.get("total_savings_usd", 0)))
 
 k5, k6, k7, k8 = st.columns(4)
-k5.metric("Presupuesto restante", money(overview.get("remaining_budget_usd", 0)))
-k6.metric("Presupuesto total", money(overview.get("total_monthly_budget_usd", 0)))
-k7.metric("Coste medio / solicitud", money(overview.get("avg_cost_per_request", 0)))
-k8.metric("Proyección mensual", money(overview.get("projected_monthly_spend_usd", 0)), help="Coste medio diario multiplicado por 30")
+k5.metric(tr("kpi_remaining_budget"), money(overview.get("remaining_budget_usd", 0)))
+k6.metric(tr("kpi_total_budget"), money(overview.get("total_monthly_budget_usd", 0)))
+k7.metric(tr("kpi_avg_cost"), money(overview.get("avg_cost_per_request", 0)))
+k8.metric(tr("kpi_month_projection"), money(overview.get("projected_monthly_spend_usd", 0)), help="Coste medio diario multiplicado por 30")
 
 st.divider()
 
-tab_overview, tab_teams, tab_models, tab_forecast, tab_audit, tab_alerts = st.tabs([
-    "Resumen", "Equipos", "Modelos y routing", "Proyección", "Auditoría", "Alertas"
-])
+tab_overview, tab_teams, tab_models, tab_forecast, tab_audit, tab_alerts = st.tabs(tr("tabs"))
 
 
 # ═══════════════ RESUMEN ═══════════════
@@ -272,10 +436,10 @@ with tab_overview:
                 consumers_df.sort_values("current_spend_usd", ascending=True),
                 x="current_spend_usd", y="name", orientation="h",
                 color_discrete_sequence=[COLOR["accent"]],
-                labels={"current_spend_usd": "Coste USD", "name": ""},
+                labels={"current_spend_usd": f"Coste ({currency_code})", "name": ""},
                 text="current_spend_usd"
             )
-            fig.update_traces(texttemplate="$%{text:.6f}", textposition="outside", marker_line_width=0)
+            fig.update_traces(texttemplate=f"{currency_symbol}%{{text:.6f}}", textposition="outside", marker_line_width=0)
             fig.update_layout(showlegend=False)
             st.plotly_chart(chart_layout(fig, 280), use_container_width=True)
             st.caption("Coste acumulado por equipo en el periodo actual, de menor a mayor gasto.")
@@ -295,7 +459,7 @@ with tab_overview:
     if not daily_df.empty and daily_df["day"].nunique() >= 2:
         st.markdown("##### Evolución diaria del coste")
         fig = px.area(daily_df, x="day", y="total_cost_usd",
-                       labels={"day": "Fecha", "total_cost_usd": "Coste USD"},
+                       labels={"day": "Fecha", "total_cost_usd": f"Coste ({currency_code})"},
                        color_discrete_sequence=[COLOR["accent"]])
         st.plotly_chart(chart_layout(fig, 300), use_container_width=True)
         st.caption("Suma de coste generado por todas las solicitudes agrupadas por día.")
@@ -321,9 +485,9 @@ with tab_teams:
             consumers_df[display_cols].rename(columns={
                 "name": "Equipo", "department": "Departamento", "requests_count": "Solicitudes",
                 "prompt_tokens": "Tokens entrada", "completion_tokens": "Tokens salida",
-                "current_spend_usd": "Gastado (USD)", "monthly_budget_usd": "Presupuesto (USD)",
-                "remaining_budget_usd": "Restante (USD)", "budget_pct": "% usado",
-                "savings_usd": "Ahorro (USD)"
+                "current_spend_usd": f"Gastado ({currency_code})", "monthly_budget_usd": f"Presupuesto ({currency_code})",
+                "remaining_budget_usd": f"Restante ({currency_code})", "budget_pct": "% usado",
+                "savings_usd": f"Ahorro ({currency_code})"
             }),
             use_container_width=True, hide_index=True
         )
@@ -345,10 +509,10 @@ with tab_teams:
             fig = px.bar(
                 team_users, x="total_cost_usd", y="user_name", orientation="h",
                 color_discrete_sequence=[COLOR["primary"]],
-                labels={"total_cost_usd": "Coste USD", "user_name": ""},
+                labels={"total_cost_usd": f"Coste ({currency_code})", "user_name": ""},
                 text="total_cost_usd"
             )
-            fig.update_traces(texttemplate="$%{text:.6f}", textposition="outside", marker_line_width=0)
+            fig.update_traces(texttemplate=f"{currency_symbol}%{{text:.6f}}", textposition="outside", marker_line_width=0)
             fig.update_layout(showlegend=False)
             st.plotly_chart(chart_layout(fig, max(220, 60 * len(team_users))), use_container_width=True)
             st.caption(f"Coste generado por cada persona del equipo {selected_team}.")
@@ -358,7 +522,7 @@ with tab_teams:
                 .rename(columns={
                     "user_name": "Usuario", "requests_count": "Solicitudes",
                     "prompt_tokens": "Tokens entrada", "completion_tokens": "Tokens salida",
-                    "total_cost_usd": "Coste (USD)", "total_savings_usd": "Ahorro (USD)"
+                    "total_cost_usd": f"Coste ({currency_code})", "total_savings_usd": f"Ahorro ({currency_code})"
                 }),
                 use_container_width=True, hide_index=True
             )
@@ -376,10 +540,10 @@ with tab_models:
             fig = px.bar(
                 models_df, x="model_id", y="total_cost_usd",
                 color="model_id", color_discrete_map=MODEL_COLORS,
-                labels={"model_id": "Modelo", "total_cost_usd": "Coste USD"},
+                labels={"model_id": "Modelo", "total_cost_usd": f"Coste ({currency_code})"},
                 text="total_cost_usd"
             )
-            fig.update_traces(texttemplate="$%{text:.6f}", textposition="outside", marker_line_width=0)
+            fig.update_traces(texttemplate=f"{currency_symbol}%{{text:.6f}}", textposition="outside", marker_line_width=0)
             fig.update_layout(showlegend=False)
             st.plotly_chart(chart_layout(fig, 320), use_container_width=True)
             st.caption("Coste total generado por cada modelo del catálogo.")
@@ -485,7 +649,7 @@ with tab_forecast:
             fig.add_trace(go.Scatter(x=seq["id"], y=seq["cumulative_cost_usd"], mode="lines", name="Histórico", line=dict(color=COLOR["accent"], width=2)))
             if not future_seq.empty:
                 fig.add_trace(go.Scatter(x=future_seq["request_idx"], y=future_seq["cumulative_cost_pred"], mode="lines", name="Proyección", line=dict(color=COLOR["critical"], width=2, dash="dash")))
-            fig.update_layout(xaxis_title="Nº de solicitud", yaxis_title="Coste acumulado (USD)")
+            fig.update_layout(xaxis_title="Nº de solicitud", yaxis_title=f"Coste acumulado ({currency_code})")
             st.plotly_chart(chart_layout(fig, 300), use_container_width=True)
             st.caption("Coste acumulado histórico y su proyección a corto plazo.")
 
@@ -532,7 +696,7 @@ with tab_forecast:
                 fig2 = go.Figure()
                 fig2.add_trace(go.Scatter(x=time_df["period"], y=time_df["total_cost_usd"], mode="lines", name="Histórico", line=dict(color=COLOR["accent"], width=2)))
                 fig2.add_trace(go.Scatter(x=future_df["period"], y=future_df["cost_pred"], mode="lines", name="Proyección", line=dict(color=COLOR["critical"], width=2, dash="dash")))
-                fig2.update_layout(xaxis_title=unit_label.capitalize(), yaxis_title="Coste USD")
+                fig2.update_layout(xaxis_title=unit_label.capitalize(), yaxis_title=f"Coste ({currency_code})")
                 st.plotly_chart(chart_layout(fig2, 300), use_container_width=True)
 
     st.divider()
@@ -588,7 +752,7 @@ with tab_audit:
                 "created_at": "Fecha", "consumer_name": "Equipo", "user_name": "Usuario",
                 "target_model": "Modelo usado", "routing_method": "Regla",
                 "prompt_tokens": "Tokens entrada", "completion_tokens": "Tokens salida",
-                "total_cost_usd": "Coste (USD)", "estimated_savings_usd": "Ahorro (USD)",
+                "total_cost_usd": f"Coste ({currency_code})", "estimated_savings_usd": f"Ahorro ({currency_code})",
                 "routing_reason": "Motivo"
             }),
             use_container_width=True, hide_index=True

@@ -2,8 +2,8 @@ require('dotenv').config();
 const db = require('./db');
 
 // Script de datos de demo: `npm run seed` desde la carpeta backend.
-// Regenera un histórico realista y deja un equipo bloqueado, otro crítico,
-// otro en aviso y otro holgado. Es idempotente (borra y vuelve a crear).
+// Regenera un histórico realista con equipos en distintos niveles de consumo
+// sin exceder el 100% de presupuesto. Es idempotente (borra y vuelve a crear).
 (async () => {
     try {
         console.log('[SEED] Generando datos de demo...');

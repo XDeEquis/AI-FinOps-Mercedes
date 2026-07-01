@@ -65,7 +65,7 @@ export function FinOpsSidebar({
     <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="glass-panel"
+      className="glass-panel finops-sidebar"
       style={{
         width: '340px',
         padding: '32px',

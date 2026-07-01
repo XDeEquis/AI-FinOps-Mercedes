@@ -138,7 +138,7 @@ export function ChatWindow({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
-      className="glass-panel"
+      className="glass-panel chat-window"
       style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
       <AnimatePresence>
@@ -172,7 +172,7 @@ export function ChatWindow({
           </motion.div>
         )}
       </AnimatePresence>
-      <div style={{
+      <div className="chat-messages" style={{
         flex: 1, overflowY: 'auto', padding: '32px',
         display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative'
       }}>
@@ -211,11 +211,11 @@ export function ChatWindow({
                 {msg.role === 'user' ? <User size={20} fill="currentColor" /> : <Bot size={20} />}
               </div>
 
-              <div style={{
-                maxWidth: '75%', display: 'flex', flexDirection: 'column',
+              <div className="chat-message-content-wrapper" style={{
+                maxWidth: 'min(75%, 680px)', display: 'flex', flexDirection: 'column',
                 alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
               }}>
-                <div style={{
+                <div className="chat-bubble" style={{
                   background: msg.role === 'user' ? 'var(--user-msg-bg)' : 'var(--ai-msg-bg)',
                   padding: '16px 20px', borderRadius: '0px', lineHeight: '1.6', fontSize: '1.05rem',
                   color: msg.role === 'user' ? 'var(--text-inverse)' : 'var(--text-primary)',
@@ -262,8 +262,8 @@ export function ChatWindow({
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ padding: '24px 32px', borderTop: '1px solid var(--panel-border)' }}>
-        <div style={{
+      <div className="chat-input-area" style={{ padding: '24px 32px', borderTop: '1px solid var(--panel-border)' }}>
+        <div className="chat-input-wrapper" style={{
           display: 'flex', background: 'var(--input-bg)', borderRadius: '0px',
           border: '1px solid var(--panel-border)', padding: '10px 10px 10px 20px',
           transition: 'all 0.3s ease', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'

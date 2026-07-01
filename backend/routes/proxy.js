@@ -217,6 +217,9 @@ router.patch('/v1/consumers/:consumerId/spend', async (req, res) => {
         const updated = await db.setConsumerSpend(req.params.consumerId, currentSpendUsd);
         res.json(updated);
     } catch (error) {
+        if (error.code === 'BUDGET_VALIDATION') {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('[SPEND ERROR] ❌', error.message);
         res.status(500).json({ error: 'No fue posible actualizar el gasto del consumidor.' });
     }
@@ -238,6 +241,9 @@ router.patch('/v1/consumers/:consumerId/budget', async (req, res) => {
         const updated = await db.setConsumerBudget(req.params.consumerId, monthlyBudgetUsd);
         res.json(updated);
     } catch (error) {
+        if (error.code === 'BUDGET_VALIDATION') {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('[BUDGET ERROR] ❌', error.message);
         res.status(500).json({ error: 'No fue posible actualizar el presupuesto del consumidor.' });
     }
@@ -421,18 +427,41 @@ router.post('/v1/chat/completions', async (req, res) => {
         console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)} | Ahorro estimado: $${estimatedSavingsUsd.toFixed(6)}`);
 
         // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2), en transacción
-        await db.recordUsageAndUpdateSpend({
-            consumerId,
-            userName,
-            requestedModel,
-            targetModel,
-            promptTokens: usage.prompt_tokens,
-            completionTokens: usage.completion_tokens,
-            totalCostUsd,
-            estimatedSavingsUsd,
-            routingMethod,
-            routingReason
-        });
+        try {
+            await db.recordUsageAndUpdateSpend({
+                consumerId,
+                userName,
+                requestedModel,
+                targetModel,
+                promptTokens: usage.prompt_tokens,
+                completionTokens: usage.completion_tokens,
+                totalCostUsd,
+                estimatedSavingsUsd,
+                routingMethod,
+                routingReason
+            });
+        } catch (error) {
+            if (error.code === 'BUDGET_VALIDATION') {
+                const freshConsumer = await db.getConsumerById(consumerId);
+                const alert = await emitAlert({
+                    consumerId,
+                    level: 'blocked',
+                    message: `${consumer.name}: operación bloqueada para evitar superar el presupuesto mensual.`
+                });
+                return res.status(403).json({
+                    error: 'La solicitud superaría el presupuesto mensual permitido.',
+                    detail: error.message,
+                    alert,
+                    finops: {
+                        consumer_id: consumerId,
+                        current_spend_usd: Number((freshConsumer?.current_spend_usd ?? currentSpend).toFixed(8)),
+                        monthly_budget_usd: Number((freshConsumer?.monthly_budget_usd ?? monthlyBudget).toFixed(2)),
+                        remaining_budget_usd: Number(Math.max(0, (freshConsumer?.monthly_budget_usd ?? monthlyBudget) - (freshConsumer?.current_spend_usd ?? currentSpend)).toFixed(8))
+                    }
+                });
+            }
+            throw error;
+        }
 
         const updatedConsumer = await db.getConsumerById(consumerId);
         const updatedRatio = monthlyBudget > 0 ? updatedConsumer.current_spend_usd / monthlyBudget : 0;
