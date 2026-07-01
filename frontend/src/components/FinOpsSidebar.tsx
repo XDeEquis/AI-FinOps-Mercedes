@@ -67,11 +67,11 @@ export function FinOpsSidebar({
       animate={{ opacity: 1, x: 0 }}
       className="glass-panel"
       style={{
-        width: '340px',
-        padding: '32px',
+        width: '24rem',
+        padding: '1.5rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '40px',
+        gap: '1rem',
         height: '100%',
         boxSizing: 'border-box'
       }}
@@ -116,8 +116,8 @@ export function FinOpsSidebar({
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <h3 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t.activeModels}</h3>
+      <div className="hide-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        <h3 style={{ margin: '0 0 4px 0', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0 }}>{t.activeModels}</h3>
 
         {models.length === 0 && (
           <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>—</p>
@@ -129,7 +129,7 @@ export function FinOpsSidebar({
             whileHover={{ scale: 1.02 }}
             className="glass-panel"
             style={{
-              padding: '20px',
+              padding: '12px 16px',
               border: '1px solid var(--panel-border)'
             }}
           >
