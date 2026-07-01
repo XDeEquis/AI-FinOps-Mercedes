@@ -1,7 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="45" fill="none" stroke="#b0b0b0" stroke-width="4"/>
-  <path d="M 50 10 L 45 50 L 17 68 Z" fill="#b0b0b0"/>
-  <path d="M 50 10 L 55 50 L 83 68 Z" fill="#b0b0b0"/>
-  <path d="M 17 68 L 50 50 L 50 85 Z" fill="#b0b0b0"/>
-  <path d="M 83 68 L 50 50 L 50 85 Z" fill="#b0b0b0"/>
+  <rect width="100" height="100" fill="#000000" />
+  <defs>
+    <!-- Gradiente metálico para el anillo exterior -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e0e0e0"/>
+      <stop offset="25%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#707070"/>
+      <stop offset="75%" stop-color="#a0a0a0"/>
+      <stop offset="100%" stop-color="#303030"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Anillo exterior brillante -->
+  <circle cx="50" cy="50" r="42" fill="none" stroke="url(#ringGrad)" stroke-width="4"/>
+  <circle cx="50" cy="50" r="39" fill="none" stroke="#222" stroke-width="0.5"/>
+  <circle cx="50" cy="50" r="44.5" fill="none" stroke="#111" stroke-width="1"/>
+  
+  <!-- Estrella 3D - Punta superior -->
+  <path d="M 50,50 L 50,11 L 55,47 Z" fill="#ffffff"/>
+  <path d="M 50,50 L 50,11 L 45,47 Z" fill="#aaaaaa"/>
+  
+  <!-- Estrella 3D - Punta inferior derecha -->
+  <path d="M 50,50 L 86,68 L 55,47 Z" fill="#888888"/>
+  <path d="M 50,50 L 86,68 L 50,54 Z" fill="#cccccc"/>
+  
+  <!-- Estrella 3D - Punta inferior izquierda -->
+  <path d="M 50,50 L 14,68 L 50,54 Z" fill="#666666"/>
+  <path d="M 50,50 L 14,68 L 45,47 Z" fill="#e0e0e0"/>
 </svg>
