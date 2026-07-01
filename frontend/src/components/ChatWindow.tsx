@@ -20,6 +20,19 @@ type ChatUsageUpdate = {
   monthlyBudget: number
 }
 
+type AlertLevel = 'warning' | 'critical' | 'blocked'
+
+type AlertBanner = {
+  level: AlertLevel
+  message: string
+}
+
+const ALERT_STYLES: Record<AlertLevel, { bg: string; border: string; icon: string }> = {
+  warning: { bg: 'rgba(255, 193, 7, 0.15)', border: '#FFC107', icon: '⚠️' },
+  critical: { bg: 'rgba(255, 107, 0, 0.15)', border: '#FF6B00', icon: '🟠' },
+  blocked: { bg: 'rgba(208, 2, 27, 0.15)', border: '#D0021B', icon: '🛑' }
+}
+
 function formatUsd(value: number): string {
   if (value >= 0.01) return value.toFixed(4)
   return value.toFixed(8)
@@ -42,6 +55,7 @@ export function ChatWindow({
   ])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [alert, setAlert] = useState<AlertBanner | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -54,11 +68,9 @@ export function ChatWindow({
     const prompt = input.trim()
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: prompt }
     setMessages(prev => [...prev, userMsg])
-    const currentInput = input
     setInput('')
     setIsTyping(true)
 
-<<<<<<< HEAD
     const consumerId = getConsumerId(user.department)
 
     try {
@@ -77,7 +89,17 @@ export function ChatWindow({
 
       const data = await response.json()
 
+      if (data?.alert) {
+        setAlert(data.alert)
+      }
+
       if (!response.ok) {
+        if (typeof data?.finops?.current_spend_usd === 'number') {
+          onMessageSent({
+            currentSpend: data.finops.current_spend_usd,
+            monthlyBudget: data.finops.monthly_budget_usd ?? 0
+          })
+        }
         throw new Error(data?.detail || data?.error || 'Error en el proxy FinOps')
       }
 
@@ -105,54 +127,6 @@ export function ChatWindow({
         role: 'assistant',
         content: `⚠️ ${msg}`
       }])
-=======
-    try {
-      // Mapeo del departamento al consumerId que espera la BDD
-      const consumerMap: Record<string, string> = {
-        'engineering': 'equipo-ingenieria',
-        'sales': 'equipo-ventas',
-        'support': 'equipo-soporte',
-        'marketing': 'equipo-marketing'
-      }
-      const consumerId = consumerMap[user.department] || 'equipo-marketing'
-      
-      const response = await fetch('http://localhost:3000/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-consumer-id': consumerId
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: currentInput }]
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error?.detail || data.error?.message || data.error || 'Error del servidor')
-      }
-
-      // Descontamos el coste del presupuesto en la UI
-      onMessageSent(data.finops.cost_usd)
-      
-      const aiMsg: Message = { 
-        id: (Date.now() + 1).toString(), 
-        role: 'assistant', 
-        content: data.choices[0].message.content,
-        model: data.model,
-        cost: data.finops.cost_usd
-      }
-      setMessages(prev => [...prev, aiMsg])
-
-    } catch (error: any) {
-      const errorMsg: Message = { 
-        id: (Date.now() + 1).toString(), 
-        role: 'assistant', 
-        content: `❌ Error de FinOps: ${error.message}`
-      }
-      setMessages(prev => [...prev, errorMsg])
->>>>>>> 90c732dac9614fc5d5a13a3ecfc7889b4ca319b1
     } finally {
       setIsTyping(false)
     }
@@ -170,6 +144,37 @@ export function ChatWindow({
       className="glass-panel"
       style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
+      <AnimatePresence>
+        {alert && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{
+              background: ALERT_STYLES[alert.level].bg,
+              borderBottom: `2px solid ${ALERT_STYLES[alert.level].border}`,
+              padding: '14px 32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px'
+            }}
+          >
+            <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>
+              {ALERT_STYLES[alert.level].icon} {alert.message}
+            </span>
+            <button
+              onClick={() => setAlert(null)}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--text-primary)', fontSize: '1.1rem', opacity: 0.6, lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div style={{
         flex: 1, overflowY: 'auto', padding: '32px',
         display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative'

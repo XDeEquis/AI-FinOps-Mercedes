@@ -7,6 +7,15 @@ GET http://localhost:3000/v1/models
 ### Resumen de consumo de un consumidor
 GET http://localhost:3000/v1/consumers/equipo-marketing/summary
 
+### Listado de todos los consumidores (para paneles de administración)
+GET http://localhost:3000/v1/consumers
+
+### Historial de notificaciones/alertas de presupuesto
+GET http://localhost:3000/v1/notifications
+
+### Dataset agregado para el dashboard Streamlit (KPIs, ML, auditoría)
+GET http://localhost:3000/v1/flow-dashboard
+
 ### Caso 1: Prompt simple -> llama3.2:3b (default_low_cost)
 POST http://localhost:3000/v1/chat/completions
 Content-Type: application/json
@@ -43,7 +52,16 @@ x-consumer-id: equipo-marketing
   ]
 }
 
+### Caso 3b: Ajustar el LÍMITE de presupuesto de un equipo (configurable en caliente)
+PATCH http://localhost:3000/v1/consumers/equipo-ingenieria/budget
+Content-Type: application/json
+
+{
+  "monthly_budget_usd": 5
+}
+
 ### Caso 4: Simular presupuesto crítico (>90%) para forzar degradación a modelo barato
+### (con esto, la siguiente petición ya debería devolver "alert": {"level":"critical", ...})
 PATCH http://localhost:3000/v1/consumers/equipo-ingenieria/spend
 Content-Type: application/json
 

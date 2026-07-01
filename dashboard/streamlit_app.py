@@ -73,38 +73,76 @@ def color_for_model(m: str) -> str:
     return COLORS.get(m, COLORS["default"])
 
 
-def predict_future(daily_df: pd.DataFrame, days_ahead: int = 14, degree: int = 2):
+def fit_predict(y: np.ndarray, steps: int, max_degree: int = 2) -> np.ndarray:
     """
-    Ajusta un modelo de regresión polinómica (grado 2) sobre los datos diarios
-    de tokens para proyectar los próximos `days_ahead` días.
-    Retorna un DataFrame con las columnas day, tokens_pred, cost_pred.
+    Ajusta una regresión polinómica sobre una serie `y` (índice = orden temporal)
+    y proyecta `steps` puntos futuros. El grado se adapta automáticamente al
+    número de muestras disponibles (con solo 2 puntos cae a una recta simple),
+    para que la proyección pueda mostrarse desde el primer momento de la demo
+    y no dependa de tener varios días de histórico acumulados.
     """
-    if len(daily_df) < 3:
-        return pd.DataFrame()
+    n = len(y)
+    if n < 2:
+        return np.array([])
 
-    df = daily_df.copy().sort_values("day").reset_index(drop=True)
-    df["day_num"] = np.arange(len(df))
-    df["total_tokens"] = df["prompt_tokens"] + df["completion_tokens"]
-
-    X = df[["day_num"]].values
-    y_tokens = df["total_tokens"].values
-    y_cost = df["total_cost_usd"].values
-
+    degree = min(max_degree, max(1, n - 1))
+    X = np.arange(n).reshape(-1, 1)
     poly = PolynomialFeatures(degree=degree, include_bias=False)
     X_poly = poly.fit_transform(X)
 
-    model_tokens = LinearRegression().fit(X_poly, y_tokens)
-    model_cost = LinearRegression().fit(X_poly, y_cost)
+    model = LinearRegression().fit(X_poly, y)
+
+    X_future = np.arange(n, n + steps).reshape(-1, 1)
+    future_poly = poly.transform(X_future)
+    preds = model.predict(future_poly)
+    return np.maximum(preds, 0)
+
+
+def predict_future(daily_df: pd.DataFrame, days_ahead: int = 14, degree: int = 2):
+    """
+    Proyección diaria (tendencia de uso a medio plazo). Requiere al menos
+    2 días distintos de histórico; con 2-3 usa recta, con más grado 2.
+    Retorna un DataFrame con las columnas day, tokens_pred, cost_pred.
+    """
+    if len(daily_df) < 2:
+        return pd.DataFrame()
+
+    df = daily_df.copy().sort_values("day").reset_index(drop=True)
+    df["total_tokens"] = df["prompt_tokens"] + df["completion_tokens"]
+
+    tokens_pred = fit_predict(df["total_tokens"].values, days_ahead, degree)
+    cost_pred = fit_predict(df["total_cost_usd"].values, days_ahead, degree)
 
     last_day = df["day"].iloc[-1]
-    future_nums = np.arange(len(df), len(df) + days_ahead).reshape(-1, 1)
-    future_poly = poly.transform(future_nums)
-
     future_days = [last_day + timedelta(days=i + 1) for i in range(days_ahead)]
-    tokens_pred = np.maximum(model_tokens.predict(future_poly), 0)
-    cost_pred = np.maximum(model_cost.predict(future_poly), 0)
 
     return pd.DataFrame({"day": future_days, "tokens_pred": tokens_pred, "cost_pred": cost_pred})
+
+
+def predict_sequence(seq_df: pd.DataFrame, steps_ahead: int = 20):
+    """
+    Proyección "por solicitud" (no por fecha). Es la que garantiza que la
+    predicción pueda enseñarse YA en una demo en vivo: basta con 2 llamadas
+    al proxy para tener una tendencia de coste acumulado y tokens por request.
+    """
+    if len(seq_df) < 2:
+        return pd.DataFrame()
+
+    df = seq_df.copy().reset_index(drop=True)
+    df["total_tokens"] = df["prompt_tokens"] + df["completion_tokens"]
+    df["cumulative_cost_usd"] = df["total_cost_usd"].cumsum()
+
+    cost_pred = fit_predict(df["cumulative_cost_usd"].values, steps_ahead)
+    tokens_pred = fit_predict(df["total_tokens"].values, steps_ahead)
+
+    last_idx = df["id"].iloc[-1]
+    future_idx = [last_idx + i + 1 for i in range(steps_ahead)]
+
+    return pd.DataFrame({
+        "request_idx": future_idx,
+        "cumulative_cost_pred": cost_pred,
+        "tokens_pred": tokens_pred
+    })
 
 
 # ──────────────────────── SIDEBAR ────────────────────────
@@ -135,20 +173,42 @@ consumers_raw = data.get("consumers", [])
 models_raw = data.get("model_usage", [])
 routing_raw = data.get("routing_usage", [])
 daily_raw = data.get("daily_spend", [])
+hourly_raw = data.get("hourly_spend", [])
+sequence_raw = data.get("request_sequence", [])
 recent_raw = data.get("recent_requests", [])
+notifications_raw = data.get("notifications", [])
 
 consumers_df = pd.DataFrame(consumers_raw) if consumers_raw else pd.DataFrame()
 models_df = pd.DataFrame(models_raw) if models_raw else pd.DataFrame()
 routing_df = pd.DataFrame(routing_raw) if routing_raw else pd.DataFrame()
 daily_df = pd.DataFrame(daily_raw) if daily_raw else pd.DataFrame()
+hourly_df = pd.DataFrame(hourly_raw) if hourly_raw else pd.DataFrame()
+sequence_df = pd.DataFrame(sequence_raw) if sequence_raw else pd.DataFrame()
 recent_df = pd.DataFrame(recent_raw) if recent_raw else pd.DataFrame()
+notifications_df = pd.DataFrame(notifications_raw) if notifications_raw else pd.DataFrame()
 
 if not daily_df.empty:
     daily_df["day"] = pd.to_datetime(daily_df["day"])
+if not hourly_df.empty:
+    hourly_df["hour"] = pd.to_datetime(hourly_df["hour"])
+if not sequence_df.empty:
+    sequence_df["created_at"] = pd.to_datetime(sequence_df["created_at"])
+if not notifications_df.empty:
+    notifications_df["created_at"] = pd.to_datetime(notifications_df["created_at"])
 
 # ──────────────────────── HEADER ────────────────────────
 st.title("📊 AI FinOps Flow Dashboard")
 st.caption(f"Última actualización: {data.get('generated_at', '—')}")
+
+# Notificación visible: los últimos avisos de presupuesto se muestran siempre
+# arriba del todo, sin necesidad de entrar a ninguna pestaña.
+if not notifications_df.empty:
+    latest_alerts = notifications_df.head(3)
+    for _, n in latest_alerts.iterrows():
+        icon = {"warning": "⚠️", "critical": "🟠", "blocked": "🛑"}.get(n["level"], "🔔")
+        render = st.error if n["level"] == "blocked" else (st.warning if n["level"] == "critical" else st.info)
+        render(f"{icon} **[{n['level'].upper()}]** {n['message']}  \n_{n['created_at']}_")
+
 st.divider()
 
 # ──────────────────────── KPIs GLOBALES ────────────────────────
@@ -164,15 +224,15 @@ k7, k8, k9, k10 = st.columns(4)
 k7.metric("Presupuesto restante", money(overview.get("remaining_budget_usd", 0)))
 k8.metric("Proyección mensual", money(overview.get("projected_monthly_spend_usd", 0)),
           help="Coste medio diario × 30")
-k9.metric("Coste evitable estimado", money(overview.get("estimated_avoidable_cost_usd", 0)),
-          help="Si se hubiera usado llama3.2:3b en vez de Mistral")
+k9.metric("Ahorro estimado (routing)", money(overview.get("total_savings_usd", 0)),
+          help="Diferencia de coste frente a haber enrutado siempre al modelo más caro (mistral:7b)")
 k10.metric("Presupuesto total", money(overview.get("total_monthly_budget_usd", 0)))
 
 st.divider()
 
 # ──────────────────────── TABS ────────────────────────
-tab_overview, tab_teams, tab_models, tab_routing, tab_ml, tab_audit = st.tabs([
-    "🌐 Global", "👥 Equipos", "🤖 Modelos", "🔀 Routing", "🔮 Proyección ML", "📋 Auditoría"
+tab_overview, tab_teams, tab_models, tab_routing, tab_ml, tab_audit, tab_alerts = st.tabs([
+    "🌐 Global", "👥 Equipos", "🤖 Modelos", "🔀 Routing", "🔮 Proyección ML", "📋 Auditoría", "🔔 Alertas"
 ])
 
 
@@ -378,12 +438,14 @@ with tab_routing:
             fig.update_layout(showlegend=False, margin=dict(t=20, b=20))
             st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("#### ¿Qué hace cada regla?")
+        st.markdown("#### ¿Qué hace cada regla y cuánto ha ahorrado?")
         for _, row in routing_df.iterrows():
             method = row["routing_method"]
             explanation = routing_explanations.get(method, method)
+            savings = row.get("total_savings_usd", 0)
+            savings_txt = f" · 💰 ahorro estimado {money(savings)}" if savings else ""
             st.markdown(
-                f"- **`{method}`** ({int(row['requests_count'])} req · {money(row['total_cost_usd'])}) "
+                f"- **`{method}`** ({int(row['requests_count'])} req · {money(row['total_cost_usd'])}{savings_txt}) "
                 f"— {explanation}"
             )
 
@@ -391,118 +453,167 @@ with tab_routing:
 # ═══════════════ TAB: PROYECCIÓN ML ═══════════════
 with tab_ml:
     st.markdown("### Proyección predictiva de tokens y coste")
+
+    # ── 1) Proyección INMEDIATA por solicitud (siempre disponible desde la 2ª petición) ──
+    st.markdown("#### 🔴 En vivo: proyección por solicitud")
     st.info(
-        "Se usa **regresión polinómica de grado 2** (scikit-learn) "
-        "entrenada sobre el histórico de uso diario para proyectar los próximos "
-        f"**{days_ahead} días**. Con más datos el modelo gana precisión."
+        "Regresión (lineal/polinómica según nº de muestras, scikit-learn) sobre "
+        "**cada llamada auditada**, sin depender de días de histórico. "
+        "Ideal para la demo en vivo: manda un par de mensajes en el chat y la curva se actualiza aquí."
     )
 
-    if daily_df.empty or len(daily_df) < 3:
+    if sequence_df.empty or len(sequence_df) < 2:
         st.warning(
-            "Se necesitan al menos 3 días de histórico para entrenar el modelo predictivo. "
-            "Sigue usando el proxy y vuelve aquí."
+            "Necesitas al menos **2 peticiones** registradas en `audit_logs` para entrenar esta proyección. "
+            "Manda 2 mensajes desde el chat del frontend y pulsa '🔄 Actualizar'."
         )
     else:
-        future_df = predict_future(daily_df, days_ahead=days_ahead)
+        seq_steps = st.slider("Nº de solicitudes futuras a proyectar", min_value=5, max_value=100, value=20, step=5)
+        seq = sequence_df.copy().reset_index(drop=True)
+        seq["total_tokens"] = seq["prompt_tokens"] + seq["completion_tokens"]
+        seq["cumulative_cost_usd"] = seq["total_cost_usd"].cumsum()
 
-        if future_df.empty:
-            st.warning("No fue posible generar la proyección.")
-        else:
-            daily_df["total_tokens"] = daily_df["prompt_tokens"] + daily_df["completion_tokens"]
-            daily_df["type"] = "Histórico"
-            future_df["total_tokens"] = future_df["tokens_pred"]
-            future_df["total_cost_usd"] = future_df["cost_pred"]
-            future_df["type"] = "Proyección ML"
+        future_seq = predict_sequence(sequence_df, steps_ahead=seq_steps)
 
-            # ── Gráfica de tokens ──
-            st.markdown("#### Tokens totales: histórico + proyección")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("##### Coste acumulado: histórico + proyección")
             fig = go.Figure()
             fig.add_trace(go.Scatter(
-                x=daily_df["day"], y=daily_df["total_tokens"],
+                x=seq["id"], y=seq["cumulative_cost_usd"],
                 mode="lines+markers", name="Histórico",
-                line=dict(color="#003DA5", width=2),
-                marker=dict(size=6)
+                line=dict(color="#00A651", width=2)
             ))
-            fig.add_trace(go.Scatter(
-                x=future_df["day"], y=future_df["total_tokens"],
-                mode="lines+markers", name="Proyección ML",
-                line=dict(color="#FF6B00", width=2, dash="dash"),
-                marker=dict(size=6, symbol="diamond")
-            ))
-            fig.update_layout(
-                xaxis_title="Fecha", yaxis_title="Tokens",
-                legend=dict(orientation="h"),
-                margin=dict(t=20, b=20)
-            )
+            if not future_seq.empty:
+                fig.add_trace(go.Scatter(
+                    x=future_seq["request_idx"], y=future_seq["cumulative_cost_pred"],
+                    mode="lines+markers", name="Proyección ML",
+                    line=dict(color="#D0021B", width=2, dash="dash"),
+                    marker=dict(symbol="diamond")
+                ))
+            fig.update_layout(xaxis_title="Nº de solicitud", yaxis_title="Coste acumulado USD",
+                               legend=dict(orientation="h"), margin=dict(t=20, b=20))
             st.plotly_chart(fig, use_container_width=True)
 
-            # ── Gráfica de coste ──
-            st.markdown("#### Coste USD: histórico + proyección")
+        with col2:
+            st.markdown("##### Tokens por solicitud: tendencia")
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(
-                x=daily_df["day"], y=daily_df["total_cost_usd"],
+                x=seq["id"], y=seq["total_tokens"],
                 mode="lines+markers", name="Histórico",
-                line=dict(color="#00A651", width=2),
-                marker=dict(size=6)
+                line=dict(color="#003DA5", width=2)
             ))
-            fig2.add_trace(go.Scatter(
-                x=future_df["day"], y=future_df["total_cost_usd"],
-                mode="lines+markers", name="Proyección ML",
-                line=dict(color="#D0021B", width=2, dash="dash"),
-                marker=dict(size=6, symbol="diamond")
-            ))
-            fig2.update_layout(
-                xaxis_title="Fecha", yaxis_title="Coste USD",
-                legend=dict(orientation="h"),
-                margin=dict(t=20, b=20)
-            )
+            if not future_seq.empty:
+                fig2.add_trace(go.Scatter(
+                    x=future_seq["request_idx"], y=future_seq["tokens_pred"],
+                    mode="lines+markers", name="Proyección ML",
+                    line=dict(color="#FF6B00", width=2, dash="dash"),
+                    marker=dict(symbol="diamond")
+                ))
+            fig2.update_layout(xaxis_title="Nº de solicitud", yaxis_title="Tokens",
+                                legend=dict(orientation="h"), margin=dict(t=20, b=20))
             st.plotly_chart(fig2, use_container_width=True)
 
-            # ── Proyección por equipo ──
-            st.markdown("#### Proyección mensual estimada por equipo")
-            if not consumers_df.empty:
-                avg_daily = overview.get("total_cost_usd", 0) / max(len(daily_df), 1)
-                proj_rows = []
-                for _, row in consumers_df.iterrows():
-                    share = (row["current_spend_usd"] / max(float(overview.get("current_spend_usd", 1)), 1e-10))
-                    proj_rows.append({
-                        "Equipo": row["name"],
-                        "Gastado actual $": row["current_spend_usd"],
-                        "Proyección 30d $": avg_daily * 30 * share,
-                        "Presupuesto $": row["monthly_budget_usd"],
-                    })
-                proj_df = pd.DataFrame(proj_rows)
+        if not future_seq.empty:
+            next_cost = future_seq["cumulative_cost_pred"].iloc[-1] - seq["cumulative_cost_usd"].iloc[-1]
+            st.success(
+                f"📈 Con la tendencia actual, las próximas **{seq_steps} solicitudes** añadirían "
+                f"aprox. **{money(max(next_cost, 0))}** de coste adicional."
+            )
 
+    st.divider()
+
+    # ── 2) Proyección temporal (por hora / por día) cuando ya hay suficiente histórico ──
+    st.markdown("#### 🕒 Proyección temporal (tendencia de uso por fecha)")
+
+    time_df, time_col, time_label = pd.DataFrame(), None, None
+    if not daily_df.empty and daily_df["day"].nunique() >= 2:
+        time_df, time_col, time_label = daily_df, "day", "día"
+    elif not hourly_df.empty and hourly_df["hour"].nunique() >= 2:
+        time_df, time_col, time_label = hourly_df, "hour", "hora"
+
+    if time_df.empty:
+        st.warning(
+            "Todavía toda la actividad está concentrada en el mismo tramo horario. "
+            "En cuanto haya actividad en 2+ horas o 2+ días distintos, aquí aparecerá la "
+            "proyección de tendencia temporal (usa mientras la proyección por solicitud de arriba)."
+        )
+    else:
+        st.caption(f"Granularidad detectada automáticamente: por **{time_label}** "
+                   f"({time_df[time_col].nunique()} puntos de histórico).")
+        future_df = predict_future(time_df.rename(columns={time_col: "day"}), days_ahead=days_ahead)
+
+        if not future_df.empty:
+            time_df = time_df.copy()
+            time_df["total_tokens"] = time_df["prompt_tokens"] + time_df["completion_tokens"]
+
+            colA, colB = st.columns(2)
+            with colA:
                 fig3 = go.Figure()
-                fig3.add_trace(go.Bar(
-                    name="Gastado actual",
-                    x=proj_df["Equipo"], y=proj_df["Gastado actual $"],
-                    marker_color="#003DA5"
-                ))
-                fig3.add_trace(go.Bar(
-                    name="Proyección 30 días",
-                    x=proj_df["Equipo"], y=proj_df["Proyección 30d $"],
-                    marker_color="#FF6B00",
-                    opacity=0.7
+                fig3.add_trace(go.Scatter(
+                    x=time_df[time_col], y=time_df["total_tokens"],
+                    mode="lines+markers", name="Histórico", line=dict(color="#003DA5", width=2)
                 ))
                 fig3.add_trace(go.Scatter(
-                    name="Límite presupuesto",
-                    x=proj_df["Equipo"], y=proj_df["Presupuesto $"],
-                    mode="markers", marker=dict(symbol="line-ew-open", size=20, color="#D0021B", line_width=2)
+                    x=future_df["day"], y=future_df["tokens_pred"],
+                    mode="lines+markers", name="Proyección ML",
+                    line=dict(color="#FF6B00", width=2, dash="dash"), marker=dict(symbol="diamond")
                 ))
-                fig3.update_layout(
-                    barmode="group",
-                    legend=dict(orientation="h"),
-                    margin=dict(t=20, b=20)
-                )
+                fig3.update_layout(xaxis_title=time_label.capitalize(), yaxis_title="Tokens",
+                                    legend=dict(orientation="h"), margin=dict(t=20, b=20))
                 st.plotly_chart(fig3, use_container_width=True)
 
-            # ── Tabla resumen ──
-            st.markdown("#### Tabla de proyección diaria")
-            future_display = future_df[["day", "total_tokens", "total_cost_usd"]].copy()
-            future_display.columns = ["Fecha", "Tokens estimados", "Coste estimado $"]
+            with colB:
+                fig4 = go.Figure()
+                fig4.add_trace(go.Scatter(
+                    x=time_df[time_col], y=time_df["total_cost_usd"],
+                    mode="lines+markers", name="Histórico", line=dict(color="#00A651", width=2)
+                ))
+                fig4.add_trace(go.Scatter(
+                    x=future_df["day"], y=future_df["cost_pred"],
+                    mode="lines+markers", name="Proyección ML",
+                    line=dict(color="#D0021B", width=2, dash="dash"), marker=dict(symbol="diamond")
+                ))
+                fig4.update_layout(xaxis_title=time_label.capitalize(), yaxis_title="Coste USD",
+                                    legend=dict(orientation="h"), margin=dict(t=20, b=20))
+                st.plotly_chart(fig4, use_container_width=True)
+
+            st.markdown(f"##### Tabla de proyección por {time_label}")
+            future_display = future_df.rename(columns={
+                "day": time_label.capitalize(), "tokens_pred": "Tokens estimados", "cost_pred": "Coste estimado $"
+            })
             future_display["Tokens estimados"] = future_display["Tokens estimados"].astype(int)
             st.dataframe(future_display, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ── 3) Proyección mensual por equipo (siempre disponible con datos actuales) ──
+    st.markdown("#### 👥 Proyección mensual estimada por equipo")
+    if not consumers_df.empty and overview.get("current_spend_usd", 0) > 0:
+        days_elapsed = max(daily_df["day"].nunique() if not daily_df.empty else 1, 1)
+        avg_daily = overview.get("total_cost_usd", 0) / days_elapsed
+        proj_rows = []
+        for _, row in consumers_df.iterrows():
+            share = (row["current_spend_usd"] / max(float(overview.get("current_spend_usd", 1)), 1e-10))
+            proj_rows.append({
+                "Equipo": row["name"],
+                "Gastado actual $": row["current_spend_usd"],
+                "Proyección 30d $": avg_daily * 30 * share,
+                "Presupuesto $": row["monthly_budget_usd"],
+            })
+        proj_df = pd.DataFrame(proj_rows)
+
+        fig5 = go.Figure()
+        fig5.add_trace(go.Bar(name="Gastado actual", x=proj_df["Equipo"], y=proj_df["Gastado actual $"], marker_color="#003DA5"))
+        fig5.add_trace(go.Bar(name="Proyección 30 días", x=proj_df["Equipo"], y=proj_df["Proyección 30d $"], marker_color="#FF6B00", opacity=0.7))
+        fig5.add_trace(go.Scatter(
+            name="Límite presupuesto", x=proj_df["Equipo"], y=proj_df["Presupuesto $"],
+            mode="markers", marker=dict(symbol="line-ew-open", size=20, color="#D0021B", line_width=2)
+        ))
+        fig5.update_layout(barmode="group", legend=dict(orientation="h"), margin=dict(t=20, b=20))
+        st.plotly_chart(fig5, use_container_width=True)
+    else:
+        st.info("Sin gasto registrado todavía para proyectar por equipo.")
 
 
 # ═══════════════ TAB: AUDITORÍA ═══════════════
@@ -526,15 +637,58 @@ with tab_audit:
         fig.update_layout(margin=dict(t=20, b=20), legend=dict(orientation="h"))
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("#### Registro completo")
+        st.markdown("#### Registro completo (qué solicitud activó qué regla y su ahorro)")
         display_cols = ["created_at", "consumer_id", "consumer_name", "department",
                         "target_model", "routing_method", "prompt_tokens",
-                        "completion_tokens", "total_cost_usd", "routing_reason"]
+                        "completion_tokens", "total_cost_usd", "estimated_savings_usd", "routing_reason"]
         available_cols = [c for c in display_cols if c in recent_df.columns]
         st.dataframe(
-            recent_df[available_cols].sort_values("created_at", ascending=False),
+            recent_df[available_cols].sort_values("created_at", ascending=False).rename(columns={
+                "created_at": "Fecha", "consumer_id": "Consumer ID", "consumer_name": "Equipo",
+                "department": "Depto", "target_model": "Modelo usado", "routing_method": "Regla",
+                "prompt_tokens": "Tokens In", "completion_tokens": "Tokens Out",
+                "total_cost_usd": "Coste $", "estimated_savings_usd": "Ahorro estimado $",
+                "routing_reason": "Motivo"
+            }),
+            use_container_width=True, hide_index=True
+        )
+
+
+# ═══════════════ TAB: ALERTAS ═══════════════
+with tab_alerts:
+    st.markdown("### Notificaciones de presupuesto (visibles + auditables)")
+    st.caption(
+        "Cada vez que un equipo cruza el 80% (aviso), 90% (crítico) o 100% (bloqueo) de su presupuesto, "
+        "el proxy registra aquí la alerta, la muestra en la UI del chat (banner) y —si se configuró "
+        "`FINOPS_ALERT_WEBHOOK_URL`— la reenvía a un canal externo (Slack/Teams/email)."
+    )
+
+    if notifications_df.empty:
+        st.info("Sin alertas generadas todavía. Se disparan automáticamente al superar el 80% del presupuesto.")
+    else:
+        level_counts = notifications_df["level"].value_counts()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("⚠️ Avisos (80%)", int(level_counts.get("warning", 0)))
+        c2.metric("🟠 Críticos (90%)", int(level_counts.get("critical", 0)))
+        c3.metric("🛑 Bloqueos (100%)", int(level_counts.get("blocked", 0)))
+
+        fig = px.bar(
+            notifications_df.groupby("level").size().reset_index(name="count"),
+            x="level", y="count", color="level",
+            color_discrete_map={"warning": "#FFC107", "critical": "#FF6B00", "blocked": "#D0021B"},
+            labels={"level": "Nivel", "count": "Nº de alertas"}
+        )
+        fig.update_layout(showlegend=False, margin=dict(t=20, b=20))
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("#### Historial de alertas")
+        st.dataframe(
+            notifications_df[["created_at", "level", "consumer_name", "message", "channel"]].rename(columns={
+                "created_at": "Fecha", "level": "Nivel", "consumer_name": "Equipo",
+                "message": "Mensaje", "channel": "Canal"
+            }),
             use_container_width=True, hide_index=True
         )
 
 st.divider()
-st.caption("AI FinOps Proxy · Mercedes-Benz Hackathon · Dashboard v2 con ML predictivo")
+st.caption("AI FinOps Proxy · Mercedes-Benz Hackathon · Dashboard v2 con ML predictivo, alertas y auditoría de ahorro")
