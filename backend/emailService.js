@@ -1,13 +1,13 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// 🚨 Ponemos los datos directamente para asegurar que funcione en la demo
+
 const transporter = nodemailer.createTransport({
     host: 'sandbox.smtp.mailtrap.io',
     port: 2525,
     auth: {
         user: '11e98266eec46d',
-        pass: '3a19facb0b03fb'  // 👈 Reemplaza con tu PASSWORD de números/letras real de Mailtrap
+        pass: '3a19facb0b03fb'  
     },
 });
 
@@ -40,6 +40,15 @@ async function sendBudgetEmail({ consumerId, level, message }) {
         `,
     };
 
+try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`[EMAIL SUCCESS] ✅ Correo enviado con éxito. ID: ${info.messageId}`);
+        return info;
+    } catch (error) {
+        console.error(`[EMAIL ERROR] ❌ Error enviando correo a Mailtrap:`, error.message);
+    }
+
 }
+
 
 module.exports = { sendBudgetEmail };

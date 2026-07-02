@@ -36,4 +36,9 @@ app.use(function (err, req, res, next) {
     });
 });
 
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor proxy FinOps corriendo en http://localhost:${PORT}`);
+});
+
 module.exports = app;

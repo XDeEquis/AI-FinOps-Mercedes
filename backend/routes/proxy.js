@@ -3,10 +3,7 @@ const axios = require('axios');
 const router = express.Router();
 const db = require('../db');
 require('dotenv').config();
-// 🧪 PRUEBA TEMPORAL DE ENVÍO DIRECTO AL ARRANCAR
-const { sendBudgetEmail } = require(__dirname + '/../emailService');
-
-
+const { sendBudgetEmail } = require('../emailService');
 
 
 const ALERT_EMAIL_DESTINATION = process.env.FINOPS_ALERT_EMAIL;
