@@ -79,7 +79,7 @@ UI_TEXT = {
         "backend": "Backend",
         "title": "AI FinOps Dashboard",
         "updated_at": "Última actualización",
-        "tabs": ["Resumen", "Equipos", "Modelos y routing", "Proyección", "Auditoría", "Alertas"],
+        "tabs": ["Resumen", "Equipos", "Modelos y routing", "Proyección", "Auditoría", "Alertas", "Beneficios"],
         "kpi_total_requests": "Solicitudes totales",
         "kpi_total_cost": "Coste acumulado",
         "kpi_budget_used": "Presupuesto usado",
@@ -88,6 +88,7 @@ UI_TEXT = {
         "kpi_total_budget": "Presupuesto total",
         "kpi_avg_cost": "Coste medio / solicitud",
         "kpi_month_projection": "Proyección mensual",
+        "kpi_avg_latency": "Latencia media",
     },
     "en": {
         "sidebar_title": "AI FinOps",
@@ -102,7 +103,7 @@ UI_TEXT = {
         "backend": "Backend",
         "title": "AI FinOps Dashboard",
         "updated_at": "Last updated",
-        "tabs": ["Overview", "Teams", "Models & routing", "Forecast", "Audit", "Alerts"],
+        "tabs": ["Overview", "Teams", "Models & routing", "Forecast", "Audit", "Alerts", "Benefits"],
         "kpi_total_requests": "Total requests",
         "kpi_total_cost": "Total spend",
         "kpi_budget_used": "Budget used",
@@ -111,6 +112,7 @@ UI_TEXT = {
         "kpi_total_budget": "Total budget",
         "kpi_avg_cost": "Avg cost / request",
         "kpi_month_projection": "Monthly projection",
+        "kpi_avg_latency": "Avg latency",
     },
 }
 
@@ -338,6 +340,7 @@ except Exception as e:
     st.stop()
 
 overview = data.get("overview", {})
+proxy_cost_state = data.get("proxy_cost_state", {})
 consumers_raw = data.get("consumers", [])
 user_usage_raw = data.get("user_usage", [])
 models_raw = data.get("model_usage", [])
@@ -369,6 +372,11 @@ for money_key in [
 ]:
     if money_key in overview:
         overview[money_key] = convert_currency_value(overview[money_key])
+
+# Aplicar conversión de divisa al bloque proxy_cost_state
+for money_key in ["proxy_monthly_cost_usd", "total_baseline_cost_usd", "total_savings_usd", "net_benefit_usd"]:
+    if money_key in proxy_cost_state:
+        proxy_cost_state[money_key] = convert_currency_value(proxy_cost_state[money_key])
 
 consumers_df = convert_currency_columns(consumers_df)
 user_usage_df = convert_currency_columns(user_usage_df)
@@ -418,9 +426,17 @@ k6.metric(tr("kpi_total_budget"), money(overview.get("total_monthly_budget_usd",
 k7.metric(tr("kpi_avg_cost"), money(overview.get("avg_cost_per_request", 0)))
 k8.metric(tr("kpi_month_projection"), money(overview.get("projected_monthly_spend_usd", 0)), help="Coste medio diario multiplicado por 30")
 
+k9, k10, k11, k12 = st.columns(4)
+avg_latency = overview.get("avg_latency_ms", 0)
+p95_latency = overview.get("p95_latency_ms", 0)
+k9.metric(tr("kpi_avg_latency"), f"{avg_latency:.0f} ms", help="Tiempo medio de respuesta del proxy de extremo a extremo")
+k10.metric("P95 latencia", f"{p95_latency:.0f} ms", help="El 95% de las solicitudes se resolvió por debajo de este tiempo")
+k11.metric("ROI del proxy", f"{proxy_cost_state.get('roi_ratio', 0):.1f}x", help="Por cada $1 invertido en operar el proxy, se ahorra este múltiplo")
+k12.metric("Ahorro vs. línea base", pct(proxy_cost_state.get("savings_ratio", 0)), help="Porcentaje ahorrado respecto a usar siempre el modelo más caro")
+
 st.divider()
 
-tab_overview, tab_teams, tab_models, tab_forecast, tab_audit, tab_alerts = st.tabs(tr("tabs"))
+tab_overview, tab_teams, tab_models, tab_forecast, tab_audit, tab_alerts, tab_benefits = st.tabs(tr("tabs"))
 
 
 # ═══════════════ RESUMEN ═══════════════
@@ -743,17 +759,52 @@ with tab_audit:
         st.plotly_chart(chart_layout(fig, 320), use_container_width=True)
         st.caption("Cada punto es una solicitud auditada; el tamaño representa el coste generado.")
 
+        # ── Latencia por modelo ──
+        if not models_df.empty and "avg_latency_ms" in models_df.columns:
+            st.markdown("##### Latencia media por modelo")
+            lat_col1, lat_col2 = st.columns(2)
+            with lat_col1:
+                fig_lat = px.bar(
+                    models_df, x="model_id", y="avg_latency_ms",
+                    color="model_id", color_discrete_map=MODEL_COLORS,
+                    labels={"model_id": "Modelo", "avg_latency_ms": "Latencia media (ms)"},
+                    text="avg_latency_ms"
+                )
+                fig_lat.update_traces(texttemplate="%{text:.0f} ms", textposition="outside", marker_line_width=0)
+                fig_lat.update_layout(showlegend=False)
+                st.plotly_chart(chart_layout(fig_lat, 280), use_container_width=True)
+                st.caption("Tiempo medio de respuesta de extremo a extremo, por modelo. Incluye llamada al proveedor + cálculo FinOps.")
+
+            with lat_col2:
+                if "min_latency_ms" in models_df.columns and "max_latency_ms" in models_df.columns:
+                    fig_range = go.Figure()
+                    for _, mrow in models_df.iterrows():
+                        color = MODEL_COLORS.get(mrow["model_id"], COLOR["neutral"])
+                        fig_range.add_trace(go.Bar(
+                            name=mrow["model_id"],
+                            x=[mrow["model_id"]],
+                            y=[mrow["max_latency_ms"] - mrow["min_latency_ms"]],
+                            base=[mrow["min_latency_ms"]],
+                            marker_color=color,
+                            text=f"min {mrow['min_latency_ms']:.0f} ms · max {mrow['max_latency_ms']:.0f} ms",
+                            hovertemplate="%{text}<extra></extra>"
+                        ))
+                    fig_range.update_layout(showlegend=False, yaxis_title="Latencia (ms)", barmode="overlay")
+                    st.plotly_chart(chart_layout(fig_range, 280), use_container_width=True)
+                    st.caption("Rango mínimo–máximo de latencia observado por modelo (la barra va del mín al máx).")
+
         st.markdown("##### Registro completo")
-        display_cols = ["created_at", "consumer_name", "user_name", "target_model", "routing_method",
-                        "prompt_tokens", "completion_tokens", "total_cost_usd", "estimated_savings_usd", "routing_reason"]
+        display_cols = ["created_at", "consumer_name", "user_name", "user_dni", "target_model", "routing_method",
+                        "prompt_tokens", "completion_tokens", "total_cost_usd", "estimated_savings_usd",
+                        "latency_ms", "routing_reason"]
         available_cols = [c for c in display_cols if c in recent_df.columns]
         st.dataframe(
             recent_df[available_cols].sort_values("created_at", ascending=False).rename(columns={
                 "created_at": "Fecha", "consumer_name": "Equipo", "user_name": "Usuario",
-                "target_model": "Modelo usado", "routing_method": "Regla",
+                "user_dni": "DNI", "target_model": "Modelo usado", "routing_method": "Regla",
                 "prompt_tokens": "Tokens entrada", "completion_tokens": "Tokens salida",
                 "total_cost_usd": f"Coste ({currency_code})", "estimated_savings_usd": f"Ahorro ({currency_code})",
-                "routing_reason": "Motivo"
+                "latency_ms": "Latencia (ms)", "routing_reason": "Motivo"
             }),
             use_container_width=True, hide_index=True
         )
@@ -793,6 +844,195 @@ with tab_alerts:
             }),
             use_container_width=True, hide_index=True
         )
+
+# ═══════════════ BENEFICIOS ═══════════════
+with tab_benefits:
+    st.markdown("#### Estado de costes y beneficios del proxy FinOps")
+    st.markdown(
+        '<p class="section-caption">Este panel demuestra el valor económico real generado por el sistema: '
+        'cuánto se ha ahorrado frente a la alternativa de usar siempre el modelo más caro, '
+        'y cuánto ROI genera el proxy respecto a su coste de operación.</p>',
+        unsafe_allow_html=True
+    )
+
+    # ── KPIs principales de beneficio ──
+    pcs = proxy_cost_state
+    total_savings = pcs.get("total_savings_usd", 0)
+    total_baseline = pcs.get("total_baseline_cost_usd", 0)
+    total_real = float(overview.get("total_cost_usd", 0))
+    proxy_cost = pcs.get("proxy_monthly_cost_usd", 5.0)
+    net_benefit = pcs.get("net_benefit_usd", 0)
+    roi = pcs.get("roi_ratio", 0)
+    savings_ratio = pcs.get("savings_ratio", 0)
+
+    b1, b2, b3, b4 = st.columns(4)
+    b1.metric(
+        "Ahorro total por routing",
+        money(total_savings),
+        help="Diferencia entre lo que habrían costado las peticiones con mistral:7b y lo que costaron realmente."
+    )
+    b2.metric(
+        "Coste operativo del proxy / mes",
+        money(proxy_cost),
+        help="Estimación del coste de mantener el servidor del proxy (configurable con FINOPS_PROXY_MONTHLY_COST_USD)."
+    )
+    b3.metric(
+        "Beneficio neto",
+        money(net_benefit),
+        delta=f"{'+' if net_benefit >= 0 else ''}{money(net_benefit)} vs. coste del proxy",
+        help="Ahorro total menos el coste mensual de operar el proxy."
+    )
+    b4.metric(
+        "ROI del proxy",
+        f"{roi:.1f}x",
+        help="Por cada dólar invertido en el proxy, se genera este múltiplo en ahorro."
+    )
+
+    # ── Tarjeta de estado ROI ──
+    if roi >= 5:
+        roi_color, roi_label = COLOR["success"], "Excelente retorno de inversión"
+    elif roi >= 2:
+        roi_color, roi_label = COLOR["accent"], "Buen retorno de inversión"
+    elif roi >= 1:
+        roi_color, roi_label = COLOR["warning"], "Retorno positivo"
+    else:
+        roi_color, roi_label = COLOR["critical"], "Todavía sin retorno positivo (necesita más uso)"
+
+    st.markdown(
+        f'<div style="border-left:4px solid {roi_color};background:{COLOR["bg_card"]};'
+        f'padding:14px 18px;border-radius:8px;margin:12px 0 4px 0;">'
+        f'<strong style="color:{roi_color};">{roi_label}.</strong> '
+        f'El proxy ha generado <strong>{money(total_savings)}</strong> en ahorros frente a un coste de operación de '
+        f'<strong>{money(proxy_cost)}/mes</strong>. '
+        f'Por cada dólar invertido en el proxy se ahorran <strong>{roi:.2f} dólares</strong> en coste de IA. '
+        f'El {pct(savings_ratio)} del coste potencial fue evitado gracias al enrutamiento inteligente.</div>',
+        unsafe_allow_html=True
+    )
+    st.caption("Línea base: coste hipotético si todas las peticiones hubiesen ido a mistral:7b ($0.24/M tokens).")
+
+    st.divider()
+
+    # ── Comparativa real vs. línea base ──
+    st.markdown("##### ¿Cuánto habría costado sin el proxy?")
+    col_cmp1, col_cmp2 = st.columns(2)
+    with col_cmp1:
+        cmp_df = pd.DataFrame({
+            "Escenario": ["Sin proxy (todo Mistral)", "Con proxy (routing inteligente)"],
+            "Coste": [total_baseline, total_real],
+            "color": [COLOR["critical"], COLOR["success"]]
+        })
+        fig_cmp = px.bar(
+            cmp_df, x="Escenario", y="Coste", color="Escenario",
+            color_discrete_map={
+                "Sin proxy (todo Mistral)": COLOR["critical"],
+                "Con proxy (routing inteligente)": COLOR["success"]
+            },
+            labels={"Coste": f"Coste total ({currency_code})"},
+            text="Coste"
+        )
+        fig_cmp.update_traces(texttemplate=f"{currency_symbol}%{{text:.4f}}", textposition="outside", marker_line_width=0)
+        fig_cmp.update_layout(showlegend=False)
+        st.plotly_chart(chart_layout(fig_cmp, 320), use_container_width=True)
+        st.caption("Comparación directa entre el coste real (con routing) y el coste hipotético usando siempre el modelo más caro.")
+
+    with col_cmp2:
+        fig_donut = go.Figure(go.Pie(
+            labels=["Coste real pagado", "Ahorro generado"],
+            values=[max(total_real, 0), max(total_savings, 0)],
+            hole=0.55,
+            marker_colors=[COLOR["accent"], COLOR["success"]],
+            textinfo="label+percent",
+            hovertemplate="%{label}: " + currency_symbol + "%{value:.4f}<extra></extra>"
+        ))
+        fig_donut.update_layout(
+            showlegend=True,
+            annotations=[dict(text=f"{pct(savings_ratio)}<br>ahorrado", x=0.5, y=0.5, font_size=15, showarrow=False)]
+        )
+        st.plotly_chart(chart_layout(fig_donut, 320), use_container_width=True)
+        st.caption("Del coste total que habría generado el escenario base, este porcentaje fue ahorrado por el proxy.")
+
+    st.divider()
+
+    # ── Ahorro acumulado por regla de routing ──
+    st.markdown("##### ¿Qué regla ha generado más ahorro?")
+    if not routing_df.empty and "total_savings_usd" in routing_df.columns:
+        savings_routing = routing_df[routing_df["total_savings_usd"] > 0].copy()
+        savings_routing["label"] = savings_routing["routing_method"].map(ROUTING_LABELS).fillna(savings_routing["routing_method"])
+        if savings_routing.empty:
+            st.info("Todavía no hay ahorro registrado por regla de routing.")
+        else:
+            fig_sav = px.bar(
+                savings_routing.sort_values("total_savings_usd"),
+                x="total_savings_usd", y="label", orientation="h",
+                color="routing_method", color_discrete_map=ROUTING_COLORS,
+                labels={"total_savings_usd": f"Ahorro ({currency_code})", "label": ""},
+                text="total_savings_usd"
+            )
+            fig_sav.update_traces(texttemplate=f"{currency_symbol}%{{text:.4f}}", textposition="outside", marker_line_width=0)
+            fig_sav.update_layout(showlegend=False)
+            st.plotly_chart(chart_layout(fig_sav, max(260, 70 * len(savings_routing))), use_container_width=True)
+            st.caption("Ahorro acumulado generado por cada regla de enrutamiento inteligente durante el periodo analizado.")
+
+    st.divider()
+
+    # ── Ahorro por equipo ──
+    st.markdown("##### Ahorro generado por equipo")
+    if not consumers_df.empty and "savings_usd" in consumers_df.columns:
+        team_sav = consumers_df[consumers_df["savings_usd"] > 0].sort_values("savings_usd", ascending=True)
+        if team_sav.empty:
+            st.info("Sin ahorro registrado por equipo todavía.")
+        else:
+            col_ts1, col_ts2 = st.columns(2)
+            with col_ts1:
+                fig_ts = px.bar(
+                    team_sav, x="savings_usd", y="name", orientation="h",
+                    color_discrete_sequence=[COLOR["success"]],
+                    labels={"savings_usd": f"Ahorro ({currency_code})", "name": ""},
+                    text="savings_usd"
+                )
+                fig_ts.update_traces(texttemplate=f"{currency_symbol}%{{text:.4f}}", textposition="outside", marker_line_width=0)
+                fig_ts.update_layout(showlegend=False)
+                st.plotly_chart(chart_layout(fig_ts, 280), use_container_width=True)
+            with col_ts2:
+                fig_ts2 = go.Figure()
+                fig_ts2.add_trace(go.Bar(
+                    name=f"Coste real ({currency_code})", x=consumers_df["name"],
+                    y=consumers_df["tracked_cost_usd"] if "tracked_cost_usd" in consumers_df.columns else consumers_df["current_spend_usd"],
+                    marker_color=COLOR["accent"]
+                ))
+                fig_ts2.add_trace(go.Bar(
+                    name=f"Ahorro ({currency_code})", x=consumers_df["name"],
+                    y=consumers_df["savings_usd"], marker_color=COLOR["success"]
+                ))
+                fig_ts2.update_layout(barmode="stack")
+                st.plotly_chart(chart_layout(fig_ts2, 280), use_container_width=True)
+            st.caption("El ahorro de cada equipo es la diferencia entre lo que habría costado con el modelo base y lo que realmente se pagó.")
+
+    st.divider()
+
+    # ── Resumen ejecutivo de beneficios ──
+    st.markdown("##### Resumen ejecutivo de beneficios")
+    total_req = int(overview.get("total_requests", 0))
+    avg_saving_per_req = total_savings / total_req if total_req > 0 else 0
+    avg_lat = overview.get("avg_latency_ms", 0)
+    p95_lat = overview.get("p95_latency_ms", 0)
+
+    exec_rows = [
+        {"Métrica": "Solicitudes procesadas por el proxy", "Valor": f"{total_req:,}"},
+        {"Métrica": "Coste total real (con routing inteligente)", "Valor": money(total_real)},
+        {"Métrica": "Coste total hipotético (sin proxy, todo Mistral)", "Valor": money(total_baseline)},
+        {"Métrica": "Ahorro total generado por routing", "Valor": money(total_savings)},
+        {"Métrica": "Ahorro medio por solicitud", "Valor": money(avg_saving_per_req)},
+        {"Métrica": "Porcentaje de coste evitado", "Valor": pct(savings_ratio)},
+        {"Métrica": "Coste operativo mensual del proxy", "Valor": money(proxy_cost)},
+        {"Métrica": "Beneficio neto (ahorro - coste proxy)", "Valor": money(net_benefit)},
+        {"Métrica": "ROI del proxy (ahorro / coste proxy)", "Valor": f"{roi:.2f}x"},
+        {"Métrica": "Latencia media del proxy", "Valor": f"{avg_lat:.0f} ms"},
+        {"Métrica": "Latencia P95 del proxy", "Valor": f"{p95_lat:.0f} ms"},
+    ]
+    st.dataframe(pd.DataFrame(exec_rows), use_container_width=True, hide_index=True)
+    st.caption("Todos los valores monetarios están en la moneda seleccionada en el sidebar. El ahorro se calcula comparando con mistral:7b como escenario base.")
+
 
 st.divider()
 st.caption("AI FinOps Proxy · Mercedes-Benz Hackathon")

@@ -293,6 +293,8 @@ router.get('/v1/notifications', async (req, res) => {
 
 /* POST Interceptor Principal */
 router.post('/v1/chat/completions', async (req, res) => {
+    // Marca de tiempo de inicio: usada al final para calcular latencia total del proxy.
+    const requestStartTime = Date.now();
     try {
         // 1. IDENTIDAD Y VISIBILIDAD (Pilar 1)
         const consumerId = req.headers['x-consumer-id'];
@@ -448,16 +450,28 @@ router.post('/v1/chat/completions', async (req, res) => {
         console.log(`[FINOPS] 💸 Coste calculado: $${totalCostUsd.toFixed(6)} | Ahorro estimado: $${estimatedSavingsUsd.toFixed(6)}`);
 
         // 6. GUARDAR AUDITORÍA Y ACTUALIZAR SALDO (Pilar 1 y 2), en transacción
+        const latencyMs = Date.now() - requestStartTime;
+        console.log(`[FINOPS] ⏱️  Latencia total: ${latencyMs}ms`);
+
+        // Resolución del DNI del usuario: buscamos en la tabla users por nombre + equipo.
+        let userDni = null;
+        if (userName) {
+            const userRow = await db.getUserByName(userName, consumerId);
+            userDni = userRow?.dni || null;
+        }
+
         try {
             await db.recordUsageAndUpdateSpend({
                 consumerId,
                 userName,
+                userDni,
                 requestedModel,
                 targetModel,
                 promptTokens: usage.prompt_tokens,
                 completionTokens: usage.completion_tokens,
                 totalCostUsd,
                 estimatedSavingsUsd,
+                latencyMs,
                 routingMethod,
                 routingReason
             });
@@ -523,6 +537,7 @@ router.post('/v1/chat/completions', async (req, res) => {
                 routing_reason: routingReason,
                 cost_usd: Number(totalCostUsd.toFixed(8)),
                 estimated_savings_usd: Number(estimatedSavingsUsd.toFixed(8)),
+                latency_ms: latencyMs,
                 current_spend_usd: Number(updatedConsumer.current_spend_usd.toFixed(8)),
                 monthly_budget_usd: Number(monthlyBudget.toFixed(2)),
                 remaining_budget_usd: Number(Math.max(0, monthlyBudget - updatedConsumer.current_spend_usd).toFixed(8))

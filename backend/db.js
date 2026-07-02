@@ -64,6 +64,11 @@ const RETIRED_MODEL_IDS = ['llama-3.1-8b-instant'];
 // cuánto se ahorró al enrutar a un modelo más barato en cada request.
 const BASELINE_MODEL_ID = 'mistral:7b';
 
+// Coste operativo mensual estimado del proxy (servidor, electricidad, mantenimiento).
+// Se usa en el panel de beneficios para calcular el ROI real del sistema.
+// Configurable por variable de entorno para ajustarlo a distintos entornos.
+const PROXY_MONTHLY_COST_USD = Number(process.env.FINOPS_PROXY_MONTHLY_COST_USD) || 5.0;
+
 async function columnExists(db, table, column) {
     const columns = await db.all(`PRAGMA table_info(${table})`);
     return columns.some((col) => col.name === column);
@@ -100,12 +105,14 @@ async function initializeDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             consumer_id TEXT NOT NULL,
             user_name TEXT,
+            user_dni TEXT,
             requested_model TEXT,
             target_model TEXT NOT NULL,
             prompt_tokens INTEGER NOT NULL CHECK (prompt_tokens >= 0),
             completion_tokens INTEGER NOT NULL CHECK (completion_tokens >= 0),
             total_cost_usd REAL NOT NULL CHECK (total_cost_usd >= 0),
             estimated_savings_usd REAL NOT NULL DEFAULT 0,
+            latency_ms INTEGER,
             routing_method TEXT NOT NULL,
             routing_reason TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -146,6 +153,16 @@ async function initializeDatabase() {
     const hasDniColumn = await columnExists(db, 'consumers', 'dni');
     if (!hasDniColumn) {
         await db.exec(`ALTER TABLE consumers ADD COLUMN dni TEXT`);
+    }
+
+    const hasLatencyColumn = await columnExists(db, 'audit_logs', 'latency_ms');
+    if (!hasLatencyColumn) {
+        await db.exec(`ALTER TABLE audit_logs ADD COLUMN latency_ms INTEGER`);
+    }
+
+    const hasUserDniColumn = await columnExists(db, 'audit_logs', 'user_dni');
+    if (!hasUserDniColumn) {
+        await db.exec(`ALTER TABLE audit_logs ADD COLUMN user_dni TEXT`);
     }
 
     for (const model of DEFAULT_MODELS) {
@@ -203,6 +220,16 @@ async function getUserByDni(dni) {
     );
 }
 
+async function getUserByName(name, consumerId) {
+    const db = await getDb();
+    return db.get(
+        `SELECT u.dni, u.name, u.consumer_id
+         FROM users u
+         WHERE u.name = ? AND u.consumer_id = ?`,
+        name, consumerId
+    );
+}
+
 async function listConsumers() {
     const db = await getDb();
     return db.all('SELECT * FROM consumers ORDER BY name ASC');
@@ -221,12 +248,14 @@ async function listActiveModels() {
 async function recordUsageAndUpdateSpend({
     consumerId,
     userName,
+    userDni,
     requestedModel,
     targetModel,
     promptTokens,
     completionTokens,
     totalCostUsd,
     estimatedSavingsUsd,
+    latencyMs,
     routingMethod,
     routingReason
 }) {
@@ -257,13 +286,13 @@ async function recordUsageAndUpdateSpend({
 
         await db.run(
             `INSERT INTO audit_logs (
-                consumer_id, user_name, requested_model, target_model,
+                consumer_id, user_name, user_dni, requested_model, target_model,
                 prompt_tokens, completion_tokens, total_cost_usd, estimated_savings_usd,
-                routing_method, routing_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            consumerId, userName || null, requestedModel || null, targetModel,
+                latency_ms, routing_method, routing_reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            consumerId, userName || null, userDni || null, requestedModel || null, targetModel,
             promptTokens, completionTokens, totalCostUsd, estimatedSavingsUsd || 0,
-            routingMethod, routingReason
+            latencyMs || null, routingMethod, routingReason
         );
 
         await db.run(
@@ -399,7 +428,10 @@ async function getFlowDashboardData() {
             COALESCE(SUM(completion_tokens), 0) AS total_completion_tokens,
             COALESCE(SUM(total_cost_usd), 0) AS total_cost_usd,
             COALESCE(SUM(estimated_savings_usd), 0) AS total_savings_usd,
-            COALESCE(AVG(total_cost_usd), 0) AS avg_cost_per_request
+            COALESCE(AVG(total_cost_usd), 0) AS avg_cost_per_request,
+            COALESCE(AVG(latency_ms), 0) AS avg_latency_ms,
+            COALESCE(MIN(latency_ms), 0) AS min_latency_ms,
+            COALESCE(MAX(latency_ms), 0) AS max_latency_ms
         FROM audit_logs
     `);
 
@@ -455,7 +487,10 @@ async function getFlowDashboardData() {
             COUNT(a.id) AS requests_count,
             COALESCE(SUM(a.prompt_tokens), 0) AS prompt_tokens,
             COALESCE(SUM(a.completion_tokens), 0) AS completion_tokens,
-            COALESCE(SUM(a.total_cost_usd), 0) AS total_cost_usd
+            COALESCE(SUM(a.total_cost_usd), 0) AS total_cost_usd,
+            COALESCE(AVG(a.latency_ms), 0) AS avg_latency_ms,
+            COALESCE(MIN(a.latency_ms), 0) AS min_latency_ms,
+            COALESCE(MAX(a.latency_ms), 0) AS max_latency_ms
         FROM audit_logs a
         LEFT JOIN models m ON m.model_id = a.target_model
         GROUP BY a.target_model
@@ -525,6 +560,7 @@ async function getFlowDashboardData() {
             c.name AS consumer_name,
             c.department,
             a.user_name,
+            COALESCE(a.user_dni, u.dni) AS user_dni,
             a.requested_model,
             a.target_model,
             a.routing_method,
@@ -532,9 +568,11 @@ async function getFlowDashboardData() {
             a.prompt_tokens,
             a.completion_tokens,
             a.total_cost_usd,
-            a.estimated_savings_usd
+            a.estimated_savings_usd,
+            a.latency_ms
         FROM audit_logs a
         LEFT JOIN consumers c ON c.id = a.consumer_id
+        LEFT JOIN users u ON u.name = a.user_name AND u.consumer_id = a.consumer_id
         ORDER BY a.created_at DESC, a.id DESC
         LIMIT 100
     `);
@@ -544,6 +582,31 @@ async function getFlowDashboardData() {
     const daysWithUsage = dailySpend.length || 1;
     const projectedMonthlySpendUsd = (overview.total_cost_usd / daysWithUsage) * 30;
 
+    // P95 de latencia: registro exactamente en el percentil 95 ordenado por latencia.
+    const totalWithLatency = await db.get(`SELECT COUNT(*) AS cnt FROM audit_logs WHERE latency_ms IS NOT NULL`);
+    const p95Offset = Math.max(0, Math.floor((totalWithLatency?.cnt || 0) * 0.95) - 1);
+    const p95Row = await db.get(
+        `SELECT latency_ms FROM audit_logs WHERE latency_ms IS NOT NULL ORDER BY latency_ms ASC LIMIT 1 OFFSET ?`,
+        p95Offset
+    );
+    const p95LatencyMs = p95Row?.latency_ms || 0;
+
+    // Coste que habrían tenido TODAS las peticiones si siempre se hubiera usado el modelo base (mistral).
+    const baselineRates = DEFAULT_MODELS.find((m) => m.model_id === BASELINE_MODEL_ID);
+    const totalBaselineCostRow = await db.get(`
+        SELECT COALESCE(SUM(
+            (prompt_tokens / 1000000.0) * ${baselineRates.input_cost_per_million} +
+            (completion_tokens / 1000000.0) * ${baselineRates.output_cost_per_million}
+        ), 0) AS total_baseline_cost_usd
+        FROM audit_logs
+    `);
+    const totalBaselineCostUsd = totalBaselineCostRow?.total_baseline_cost_usd || 0;
+    const totalSavingsUsd = overview.total_savings_usd || 0;
+
+    // ROI del proxy: cuánto se ha ahorrado por cada dólar invertido en operar el proxy.
+    const netBenefitUsd = totalSavingsUsd - PROXY_MONTHLY_COST_USD;
+    const roiRatio = PROXY_MONTHLY_COST_USD > 0 ? totalSavingsUsd / PROXY_MONTHLY_COST_USD : 0;
+
     return {
         generated_at: new Date().toISOString(),
         overview: {
@@ -552,7 +615,16 @@ async function getFlowDashboardData() {
             budget_usage_ratio: overview.total_monthly_budget_usd > 0
                 ? overview.current_spend_usd / overview.total_monthly_budget_usd
                 : 0,
-            projected_monthly_spend_usd: projectedMonthlySpendUsd
+            projected_monthly_spend_usd: projectedMonthlySpendUsd,
+            p95_latency_ms: p95LatencyMs
+        },
+        proxy_cost_state: {
+            proxy_monthly_cost_usd: PROXY_MONTHLY_COST_USD,
+            total_baseline_cost_usd: totalBaselineCostUsd,
+            total_savings_usd: totalSavingsUsd,
+            net_benefit_usd: netBenefitUsd,
+            roi_ratio: roiRatio,
+            savings_ratio: totalBaselineCostUsd > 0 ? totalSavingsUsd / totalBaselineCostUsd : 0
         },
         consumers,
         user_usage: userUsage,
@@ -609,6 +681,13 @@ async function seedDemoData() {
     const rates = {};
     for (const m of DEFAULT_MODELS) rates[m.model_id] = m;
     const baseline = rates[BASELINE_MODEL_ID];
+
+    // Mapa de DNI por usuario: clave "consumer_id:nombre" → dni
+    // Permite enriquecer cada registro de audit_log con el DNI real del usuario.
+    const userDniMap = {};
+    for (const u of DEFAULT_USERS) {
+        userDniMap[`${u.consumer_id}:${u.name}`] = u.dni;
+    }
 
     // targetRatio = gasto / presupuesto deseado al final del seed.
     // Volúmenes altos (cargas corporativas con contexto largo) para que el gasto
@@ -670,18 +749,26 @@ async function seedDemoData() {
                     }
 
                     const user = team.users[Math.floor(rand() * team.users.length)];
+                    const userDni = userDniMap[`${team.id}:${user}`] || null;
                     const dt = new Date(now - d * 86400000);
                     dt.setHours(8 + Math.floor(rand() * 11), Math.floor(rand() * 60), Math.floor(rand() * 60), 0);
 
+                    // Latencia simulada: mistral es más lento por ser un modelo 7B más grande.
+                    // Base + fracción de tokens procesados + ruido aleatorio para que se vea variación natural.
+                    const totalTokens = promptTokens + completionTokens;
+                    const latencyMs = choice.model === 'mistral:7b'
+                        ? Math.floor(2200 + totalTokens * 0.022 + rand() * 3500)
+                        : Math.floor(700 + totalTokens * 0.009 + rand() * 1200);
+
                     await db.run(
                         `INSERT INTO audit_logs (
-                            consumer_id, user_name, requested_model, target_model,
+                            consumer_id, user_name, user_dni, requested_model, target_model,
                             prompt_tokens, completion_tokens, total_cost_usd, estimated_savings_usd,
-                            routing_method, routing_reason, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        team.id, user, null, choice.model,
+                            latency_ms, routing_method, routing_reason, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        team.id, user, userDni, null, choice.model,
                         promptTokens, completionTokens, cost, savings,
-                        choice.method, choice.reason, formatTimestamp(dt)
+                        latencyMs, choice.method, choice.reason, formatTimestamp(dt)
                     );
 
                     spendByTeam[team.id] += cost;
@@ -727,6 +814,7 @@ module.exports = {
     getConsumerById,
     getConsumerByDni,
     getUserByDni,
+    getUserByName,
     listConsumers,
     getModelById,
     listActiveModels,
@@ -741,5 +829,6 @@ module.exports = {
     DEFAULT_USERS,
     DEFAULT_MODELS,
     DEFAULT_BUDGET_USD,
-    BASELINE_MODEL_ID
+    BASELINE_MODEL_ID,
+    PROXY_MONTHLY_COST_USD
 };
