@@ -263,6 +263,22 @@ router.get('/v1/consumers', async (req, res) => {
     }
 });
 
+/* GET validate user by DNI */
+router.get('/v1/consumers/validate/:dni', async (req, res) => {
+    try {
+        const { dni } = req.params;
+        const user = await db.getUserByDni(dni);
+        if (!user) {
+            return res.status(404).json({ error: 'DNI no registrado' });
+        }
+        res.json(user);
+    } catch (error) {
+        console.error('[VALIDATE DNI ERROR] ❌', error.message);
+        res.status(500).json({ error: 'No fue posible validar el DNI.' });
+    }
+});
+
+
 /* GET historial de notificaciones/alertas de presupuesto (para UI y dashboard) */
 router.get('/v1/notifications', async (req, res) => {
     try {

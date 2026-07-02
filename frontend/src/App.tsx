@@ -11,6 +11,7 @@ import './index.css'
 export interface UserSession {
   name: string
   department: Department
+  dni?: string
 }
 
 type FontSize = 'small' | 'medium' | 'large'
@@ -32,8 +33,9 @@ export default function App() {
   const fontDropdownRef = useRef<HTMLDivElement>(null)
 
   const [user, setUser] = useState<UserSession | null>(null)
-  const [tempName, setTempName] = useState('')
-  const [tempDept, setTempDept] = useState<Department>('marketing')
+  const [tempDni, setTempDni] = useState('')
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   useEffect(() => {
     if (isDarkMode) {
@@ -102,15 +104,38 @@ export default function App() {
     { code: 'large', label: translations[lang].fontLarge }
   ]
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!tempName.trim()) return
-    setUser({ name: tempName, department: tempDept })
+    if (!tempDni.trim()) return
+    
+    setIsLoggingIn(true)
+    setLoginError(null)
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/consumers/validate/${tempDni.trim()}`)
+      if (response.status === 404) {
+        setLoginError(translations[lang].dniError || 'DNI no registrado')
+      } else if (!response.ok) {
+        setLoginError(translations[lang].connectionError || 'Error de conexión')
+      } else {
+        const consumer = await response.json()
+        setUser({ 
+          name: consumer.name, 
+          department: consumer.department as Department,
+          dni: consumer.dni 
+        })
+      }
+    } catch (err) {
+      setLoginError(translations[lang].connectionError || 'Error de conexión con el backend proxy')
+    } finally {
+      setIsLoggingIn(false)
+    }
   }
 
   const handleLogout = () => {
     setUser(null)
-    setTempName('')
+    setTempDni('')
+    setLoginError(null)
   }
 
   const renderControls = (inSidebar: boolean) => {
@@ -307,29 +332,22 @@ export default function App() {
               <input 
                 type="text" 
                 className="register-input" 
-                value={tempName} 
-                onChange={(e) => setTempName(e.target.value)} 
+                value={tempDni} 
+                onChange={(e) => setTempDni(e.target.value)} 
                 placeholder={translations[lang].namePlaceholder}
                 required
+                disabled={isLoggingIn}
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">{translations[lang].deptLabel}</label>
-              <select 
-                className="register-select" 
-                value={tempDept} 
-                onChange={(e) => setTempDept(e.target.value as Department)}
-              >
-                <option value="marketing">{translations[lang].deptMarketing}</option>
-                <option value="engineering">{translations[lang].deptEngineering}</option>
-                <option value="sales">{translations[lang].deptSales}</option>
-                <option value="support">{translations[lang].deptSupport}</option>
-              </select>
-            </div>
+            {loginError && (
+              <div style={{ color: '#ff6b6b', fontSize: '0.875rem', marginTop: '-12px', fontWeight: 500 }}>
+                ⚠️ {loginError}
+              </div>
+            )}
 
-            <button type="submit" className="register-btn">
-              {translations[lang].enterBtn}
+            <button type="submit" className="register-btn" disabled={isLoggingIn}>
+              {isLoggingIn ? '...' : translations[lang].enterBtn}
             </button>
           </form>
         </motion.div>

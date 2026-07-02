@@ -27,10 +27,25 @@ function getDb() {
 // Mapeo departamento (frontend) -> consumidor FinOps (backend).
 // Debe coincidir exactamente con DEPARTMENT_TO_CONSUMER en frontend/src/consumers.ts.
 const DEFAULT_CONSUMERS = [
-    { id: 'equipo-marketing', name: 'Equipo Marketing', department: 'marketing', monthly_budget_usd: DEFAULT_BUDGET_USD },
-    { id: 'equipo-ingenieria', name: 'Equipo Ingeniería', department: 'engineering', monthly_budget_usd: DEFAULT_BUDGET_USD },
-    { id: 'equipo-ventas', name: 'Equipo Ventas', department: 'sales', monthly_budget_usd: DEFAULT_BUDGET_USD },
-    { id: 'equipo-soporte', name: 'Equipo Soporte', department: 'support', monthly_budget_usd: DEFAULT_BUDGET_USD }
+    { id: 'equipo-marketing', name: 'Equipo Marketing', department: 'marketing', dni: '1234567A', monthly_budget_usd: DEFAULT_BUDGET_USD },
+    { id: 'equipo-ingenieria', name: 'Equipo Ingeniería', department: 'engineering', dni: '8765432B', monthly_budget_usd: DEFAULT_BUDGET_USD },
+    { id: 'equipo-ventas', name: 'Equipo Ventas', department: 'sales', dni: '11223344C', monthly_budget_usd: DEFAULT_BUDGET_USD },
+    { id: 'equipo-soporte', name: 'Equipo Soporte', department: 'support', dni: '55667788D', monthly_budget_usd: DEFAULT_BUDGET_USD }
+];
+
+const DEFAULT_USERS = [
+    { dni: '1234567A', name: 'Sofía', consumer_id: 'equipo-marketing' },
+    { dni: '1234567B', name: 'Diego', consumer_id: 'equipo-marketing' },
+    { dni: '1234567C', name: 'Elena', consumer_id: 'equipo-marketing' },
+    { dni: '8765432B', name: 'Alejandro', consumer_id: 'equipo-ingenieria' },
+    { dni: '8765432C', name: 'Laura', consumer_id: 'equipo-ingenieria' },
+    { dni: '8765432D', name: 'Marc', consumer_id: 'equipo-ingenieria' },
+    { dni: '8765432E', name: 'Nuria', consumer_id: 'equipo-ingenieria' },
+    { dni: '11223344C', name: 'Carlos', consumer_id: 'equipo-ventas' },
+    { dni: '11223344D', name: 'Marta', consumer_id: 'equipo-ventas' },
+    { dni: '11223344E', name: 'Iván', consumer_id: 'equipo-ventas' },
+    { dni: '55667788D', name: 'Paula', consumer_id: 'equipo-soporte' },
+    { dni: '55667788E', name: 'Hugo', consumer_id: 'equipo-soporte' }
 ];
 
 // Tarifas y endpoints tomados literalmente de las bases del hackathon (.cursorrules / material/README.md).
@@ -64,6 +79,7 @@ async function initializeDatabase() {
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             department TEXT,
+            dni TEXT UNIQUE,
             monthly_budget_usd REAL NOT NULL CHECK (monthly_budget_usd >= 0),
             current_spend_usd REAL NOT NULL DEFAULT 0 CHECK (current_spend_usd >= 0),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +122,13 @@ async function initializeDatabase() {
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (consumer_id) REFERENCES consumers(id)
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            dni TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            consumer_id TEXT NOT NULL,
+            FOREIGN KEY (consumer_id) REFERENCES consumers(id)
+        );
     `);
 
     // Migraciones idempotentes: si la BD ya existía de una versión anterior,
@@ -118,6 +141,11 @@ async function initializeDatabase() {
     const hasUserNameColumn = await columnExists(db, 'audit_logs', 'user_name');
     if (!hasUserNameColumn) {
         await db.exec(`ALTER TABLE audit_logs ADD COLUMN user_name TEXT`);
+    }
+
+    const hasDniColumn = await columnExists(db, 'consumers', 'dni');
+    if (!hasDniColumn) {
+        await db.exec(`ALTER TABLE consumers ADD COLUMN dni TEXT`);
     }
 
     for (const model of DEFAULT_MODELS) {
@@ -135,9 +163,21 @@ async function initializeDatabase() {
 
     for (const consumer of DEFAULT_CONSUMERS) {
         await db.run(
-            `INSERT OR IGNORE INTO consumers (id, name, department, monthly_budget_usd, current_spend_usd)
-             VALUES (?, ?, ?, ?, 0)`,
-            consumer.id, consumer.name, consumer.department, consumer.monthly_budget_usd
+            `INSERT OR IGNORE INTO consumers (id, name, department, dni, monthly_budget_usd, current_spend_usd)
+             VALUES (?, ?, ?, ?, ?, 0)`,
+            consumer.id, consumer.name, consumer.department, consumer.dni, consumer.monthly_budget_usd
+        );
+        // Aseguramos que el DNI se actualice para los registros que ya existían
+        await db.run(
+            `UPDATE consumers SET dni = ? WHERE id = ?`,
+            consumer.dni, consumer.id
+        );
+    }
+
+    for (const user of DEFAULT_USERS) {
+        await db.run(
+            `INSERT OR IGNORE INTO users (dni, name, consumer_id) VALUES (?, ?, ?)`,
+            user.dni, user.name, user.consumer_id
         );
     }
 }
@@ -145,6 +185,22 @@ async function initializeDatabase() {
 async function getConsumerById(consumerId) {
     const db = await getDb();
     return db.get('SELECT * FROM consumers WHERE id = ?', consumerId);
+}
+
+async function getConsumerByDni(dni) {
+    const db = await getDb();
+    return db.get('SELECT * FROM consumers WHERE dni = ?', dni);
+}
+
+async function getUserByDni(dni) {
+    const db = await getDb();
+    return db.get(
+        `SELECT u.dni, u.name, u.consumer_id, c.name AS consumer_name, c.department, c.monthly_budget_usd, c.current_spend_usd 
+         FROM users u 
+         JOIN consumers c ON c.id = u.consumer_id 
+         WHERE u.dni = ?`,
+        dni
+    );
 }
 
 async function listConsumers() {
@@ -579,6 +635,14 @@ async function seedDemoData() {
         await db.run('DELETE FROM audit_logs');
         await db.run('DELETE FROM notifications');
         await db.run('UPDATE consumers SET current_spend_usd = 0');
+        await db.run('DELETE FROM users');
+
+        for (const user of DEFAULT_USERS) {
+            await db.run(
+                `INSERT OR IGNORE INTO users (dni, name, consumer_id) VALUES (?, ?, ?)`,
+                user.dni, user.name, user.consumer_id
+            );
+        }
 
         const spendByTeam = {};
 
@@ -661,6 +725,8 @@ module.exports = {
     initializeDatabase,
     seedDemoData,
     getConsumerById,
+    getConsumerByDni,
+    getUserByDni,
     listConsumers,
     getModelById,
     listActiveModels,
@@ -672,6 +738,7 @@ module.exports = {
     listNotifications,
     getFlowDashboardData,
     DEFAULT_CONSUMERS,
+    DEFAULT_USERS,
     DEFAULT_MODELS,
     DEFAULT_BUDGET_USD,
     BASELINE_MODEL_ID
