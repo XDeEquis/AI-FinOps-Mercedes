@@ -1,33 +1,36 @@
-# AI-FinOps-Mercedes
+AI-FinOps-Mercedes
+Platform developed during a hackathon, focused on the intersection of FinOps and Artificial Intelligence. Its main goal is to help understand, control, and optimize technology spending through data analysis.
 
-Plataforma desarrollada en el contexto de una hackatón, orientada a la intersección entre FinOps e Inteligencia Artificial. Su objetivo principal es ayudar a entender, controlar y optimizar el gasto tecnológico mediante el análisis de datos.
+The Problem
+The growth of cloud and infrastructure costs often lacks shared technical and financial visibility. This solution acts as an analytical base that consolidates consumption information, transforms it into indicators, and detects optimization opportunities, presenting understandable results for both technical and business profiles.
 
-## El Problema
+Architecture and Technologies
+The repository implements a hybrid architecture oriented towards analytical and operational results:
 
-El crecimiento de los costos de infraestructura y nube suele carecer de una visibilidad técnica y financiera compartida. Esta solución actúa como una base analítica que consolida información de consumo, la transforma en indicadores y detecta oportunidades de optimización, presentando resultados comprensibles tanto para perfiles técnicos como de negocio.
+TypeScript (38.1%) and JavaScript (28.1%): These constitute the main base of the project. They handle application implementation, structure, maintainability, and flow orchestration.
 
-## Arquitectura y Tecnologías
+Python (26.3%): Dedicated exclusively to analytical processing and the integration of Artificial Intelligence models or rules.
 
-El repositorio implementa una arquitectura híbrida orientada al resultado analítico-operativo:
+HTML and CSS: Functional presentation layer for data visualization.
 
-* **TypeScript (38.1%) y JavaScript (28.1%)**: Constituyen la base principal del proyecto. Se encargan de la implementación de la aplicación, estructura, mantenibilidad y orquestación de flujos.
-* **Python (26.3%)**: Dedicado exclusivamente al procesamiento analítico y la integración de modelos o reglas de Inteligencia Artificial.
-* **HTML y CSS**: Capa de presentación funcional para la visualización de resultados.
+FinOps Operational Flow
+The system converts raw technical data into actionable economic decisions following this flow:
 
-## Flujo Operativo FinOps
+Data input: Ingestion of costs and consumption categorized by service, environment, team, or time period.
 
-El sistema convierte datos técnicos crudos en decisiones económicas accionables siguiendo este flujo:
+Normalization: Data cleaning, grouping, temporal comparison, and initial pattern detection.
 
-1. **Entrada de datos**: Ingesta de costos y consumos categorizados por servicio, entorno, equipo o periodo temporal.
-2. **Normalización**: Limpieza de datos, agrupación, comparación temporal y detección inicial de patrones.
-3. **Interpretación inteligente**: Aplicación de IA y reglas lógicas para identificar desviaciones, ineficiencias o sobreaprovisionamiento de recursos.
-4. **Salida operativa**: Emisión de recomendaciones concretas y visualización de datos para facilitar la priorización de acciones.
+Intelligent interpretation: Application of AI and logic rules to identify deviations, inefficiencies, or resource over-provisioning.
 
-## Valor del Proyecto
+Operational output: Generation of specific recommendations and data visualization to facilitate action prioritization.
 
-AI-FinOps-Mercedes aborda un problema real de alto impacto: optimizar los costos sin perder el contexto técnico. El proyecto establece una base escalable para:
+Project Value
+AI-FinOps-Mercedes addresses a high-impact, real-world problem: optimizing costs without losing technical context. The project establishes a scalable base to:
 
-* Mejorar la visibilidad financiera de plataformas tecnológicas.
-* Acelerar las decisiones de optimización de infraestructura.
-* Integrar criterios técnicos y económicos dentro de un único flujo de trabajo.
-* Facilitar la automatización de recomendaciones de ahorro mediante Inteligencia Artificial.
+Improve the financial visibility of technology platforms.
+
+Accelerate infrastructure optimization decisions.
+
+Integrate technical and economic criteria into a single workflow.
+
+Facilitate the automation of savings recommendations using Artificial Intelligence.
